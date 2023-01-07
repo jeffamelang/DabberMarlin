@@ -28,7 +28,7 @@
 /**
  * Marlin release version identifier
  */
-//#define SHORT_BUILD_VERSION "2.1.2"
+#define SHORT_BUILD_VERSION "0.0.2"
 
 /**
  * Verbose version identifier which should contain a reference to the location
@@ -65,7 +65,7 @@
  * The WEBSITE_URL is the location where users can get more information such as
  * documentation about a specific Marlin release.
  */
-//#define WEBSITE_URL "marlinfw.org"
+#define WEBSITE_URL "Dapper Dabber"
 
 /**
  * Set the vendor info the serial USB interface, if changable

@@ -582,8 +582,10 @@ bool Probe::probe_down_to_z(const_float_t z, const_feedRate_t fr_mm_s) {
     thermalManager.wait_for_hotend_heating(active_extruder);
   #endif
   #if ENABLED(BLTOUCH)
-    if (!bltouch.high_speed_mode && bltouch.deploy())
+    if (!bltouch.high_speed_mode && bltouch.deploy()) {
+      //SERIAL_ECHOLNPGM("probe_down_to_z bltouch in low speed and deployed, returning true");
       return true; // Deploy in LOW SPEED MODE on every probe action
+    }
   #endif
 
   // Disable stealthChop if used. Enable diag1 pin on driver.
@@ -601,6 +603,7 @@ bool Probe::probe_down_to_z(const_float_t z, const_feedRate_t fr_mm_s) {
   TERN_(HAS_QUIET_PROBING, set_probing_paused(true));
 
   // Move down until the probe is triggered
+  //SERIAL_ECHOLNPGM("probe_down_to_z doing blocking move to ", z);
   do_blocking_move_to_z(z, fr_mm_s);
 
   // Check to see if the probe was triggered
@@ -611,6 +614,7 @@ bool Probe::probe_down_to_z(const_float_t z, const_feedRate_t fr_mm_s) {
       TEST(endstops.trigger_state(), Z_MIN_PROBE)
     #endif
   ;
+      //SERIAL_ECHOLNPGM("probe_down_to_z probe_triggered is ", probe_triggered);
 
   // Offset sensorless probing
   #if HAS_DELTA_SENSORLESS_PROBING
@@ -635,6 +639,7 @@ bool Probe::probe_down_to_z(const_float_t z, const_feedRate_t fr_mm_s) {
       return true; // Stow in LOW SPEED MODE on every trigger
   #endif
 
+  //SERIAL_ECHOLNPGM("probe_down_to_z checking end");
   // Clear endstop flags
   endstops.hit_on_purpose();
 
@@ -644,6 +649,7 @@ bool Probe::probe_down_to_z(const_float_t z, const_feedRate_t fr_mm_s) {
   // Tell the planner where we actually are
   sync_plan_position();
 
+  //SERIAL_ECHOLNPGM("probe_down_to_z done");
   return !probe_triggered;
 }
 
@@ -692,16 +698,19 @@ bool Probe::probe_down_to_z(const_float_t z, const_feedRate_t fr_mm_s) {
  *
  * @return The Z position of the bed at the current XY or NAN on error.
  */
-float Probe::run_z_probe(const bool sanity_check/*=true*/) {
+float Probe::run_z_probe(const bool sanity_check/*=true*/, const float destination_z/*=NAN*/, const int number_of_probes/*=2*/) {
   DEBUG_SECTION(log_probe, "Probe::run_z_probe", DEBUGGING(LEVELING));
 
   auto try_to_probe = [&](PGM_P const plbl, const_float_t z_probe_low_point, const feedRate_t fr_mm_s, const bool scheck, const float clearance) -> bool {
+    //SERIAL_ECHOLNPGM("run_z_probe try_to_probe 0");
     // Tare the probe, if supported
     if (TERN0(PROBE_TARE, tare())) return true;
 
     // Do a first probe at the fast speed
     const bool probe_fail = probe_down_to_z(z_probe_low_point, fr_mm_s),            // No probe trigger?
                early_fail = (scheck && current_position.z > -offset.z + clearance); // Probe triggered too high?
+    //SERIAL_ECHOLNPGM("run_z_probe try_to_probe 1 probe_fail ", probe_fail, " early_fail ", early_fail);
+    //SERIAL_ECHOLNPGM("run_z_probe try_to_probe 2 current_position.z ", current_position.z, ", -offset.z ", -offset.z, ", clearance", clearance);
     #if ENABLED(DEBUG_LEVELING_FEATURE)
       if (DEBUGGING(LEVELING) && (probe_fail || early_fail)) {
         DEBUG_ECHOPGM_P(plbl);
@@ -718,23 +727,32 @@ float Probe::run_z_probe(const bool sanity_check/*=true*/) {
 
   // Stop the probe before it goes too low to prevent damage.
   // If Z isn't known then probe to -10mm.
-  const float z_probe_low_point = axis_is_trusted(Z_AXIS) ? -offset.z + Z_PROBE_LOW_POINT : -10.0;
+  const float z_probe_low_point = isnan(destination_z) ? (axis_is_trusted(Z_AXIS) ? -offset.z + Z_PROBE_LOW_POINT : -10.0) : destination_z;
+  //SERIAL_ECHOLNPGM("run_z_probe z_probe_low_point ", z_probe_low_point);
 
   // Double-probing does a fast probe followed by a slow probe
   #if TOTAL_PROBING == 2
 
     // Attempt to tare the probe
+    //SERIAL_ECHOLNPGM("run_z_probe, about to tare");
     if (TERN0(PROBE_TARE, tare())) return NAN;
 
     // Do a first probe at the fast speed
+    //SERIAL_ECHOLNPGM("run_z_probe, fast about to try_to_probe");
     if (try_to_probe(PSTR("FAST"), z_probe_low_point, z_probe_fast_mm_s,
                      sanity_check, Z_CLEARANCE_BETWEEN_PROBES) ) return NAN;
 
+    //SERIAL_ECHOLNPGM("run_z_probe, done with try_to_probe");
     const float first_probe_z = DIFF_TERN(HAS_DELTA_SENSORLESS_PROBING, current_position.z, largest_sensorless_adj);
+    //SERIAL_ECHOLNPGM("run_z_probe, first_probe_z ", first_probe_z);
     if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("1st Probe Z:", first_probe_z);
 
     // Raise to give the probe clearance
+    //SERIAL_ECHOLNPGM("run_z_probe, raising to ", current_position.z + Z_CLEARANCE_MULTI_PROBE);
     do_blocking_move_to_z(current_position.z + Z_CLEARANCE_MULTI_PROBE, z_probe_fast_mm_s);
+    if (number_of_probes == 1) {
+      return first_probe_z;
+    }
 
   #elif Z_PROBE_FEEDRATE_FAST != Z_PROBE_FEEDRATE_SLOW
 
@@ -764,15 +782,18 @@ float Probe::run_z_probe(const bool sanity_check/*=true*/) {
   #endif
     {
       // If the probe won't tare, return
+      //SERIAL_ECHOLNPGM("run_z_probe, slow probe, about to tare");
       if (TERN0(PROBE_TARE, tare())) return true;
 
       // Probe downward slowly to find the bed
+      //SERIAL_ECHOLNPGM("run_z_probe, about to try_to_probe");
       if (try_to_probe(PSTR("SLOW"), z_probe_low_point, MMM_TO_MMS(Z_PROBE_FEEDRATE_SLOW),
                        sanity_check, Z_CLEARANCE_MULTI_PROBE) ) return NAN;
 
       TERN_(MEASURE_BACKLASH_WHEN_PROBING, backlash.measure_with_probe());
 
       const float z = DIFF_TERN(HAS_DELTA_SENSORLESS_PROBING, current_position.z, largest_sensorless_adj);
+      //SERIAL_ECHOLNPGM("run_z_probe, z is ", z);
 
       #if EXTRA_PROBING > 0
         // Insert Z measurement into probes[]. Keep it sorted ascending.
@@ -829,6 +850,7 @@ float Probe::run_z_probe(const bool sanity_check/*=true*/) {
 
     // Return a weighted average of the fast and slow probes
     const float measured_z = (z2 * 3.0 + first_probe_z * 2.0) * 0.2;
+      //SERIAL_ECHOLNPGM("run_z_probe, measured_z is ", measured_z);
 
   #else
 
@@ -849,8 +871,9 @@ float Probe::run_z_probe(const bool sanity_check/*=true*/) {
  *   - Raise to the BETWEEN height
  * - Return the probed Z position
  */
-float Probe::probe_at_point(const_float_t rx, const_float_t ry, const ProbePtRaise raise_after/*=PROBE_PT_NONE*/, const uint8_t verbose_level/*=0*/, const bool probe_relative/*=true*/, const bool sanity_check/*=true*/) {
+float Probe::probe_at_point(const_float_t rx, const_float_t ry, const ProbePtRaise raise_after/*=PROBE_PT_NONE*/, const uint8_t verbose_level/*=0*/, const bool probe_relative/*=true*/, const bool sanity_check/*=true*/, const float destination_z/*=NAN*/, const int number_of_probes/*=2*/) {
   DEBUG_SECTION(log_probe, "Probe::probe_at_point", DEBUGGING(LEVELING));
+  //SERIAL_ECHOLNPGM("probe_at_point 0 ", rx, ", ", ry);
 
   if (DEBUGGING(LEVELING)) {
     DEBUG_ECHOLNPGM(
@@ -861,38 +884,53 @@ float Probe::probe_at_point(const_float_t rx, const_float_t ry, const ProbePtRai
     );
     DEBUG_POS("", current_position);
   }
+  //SERIAL_ECHOLNPGM("probe_at_point 1");
 
   #if ENABLED(BLTOUCH)
     if (bltouch.high_speed_mode && bltouch.triggered())
       bltouch._reset();
   #endif
 
+  //SERIAL_ECHOLNPGM("probe_at_point 2");
   // On delta keep Z below clip height or do_blocking_move_to will abort
   xyz_pos_t npos = NUM_AXIS_ARRAY(
     rx, ry, TERN(DELTA, _MIN(delta_clip_start_height, current_position.z), current_position.z),
     current_position.i, current_position.j, current_position.k,
     current_position.u, current_position.v, current_position.w
   );
+  //SERIAL_ECHOLNPGM("probe_at_point 3, checking npos = (", npos.x, ",", npos.y, ")");
   if (!can_reach(npos, probe_relative)) {
     if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Position Not Reachable");
     return NAN;
   }
+  //SERIAL_ECHOLNPGM("probe_at_point 4");
   if (probe_relative) npos -= offset_xy;  // Get the nozzle position
 
+  //SERIAL_ECHOLNPGM("probe_at_point 5");
   // Move the probe to the starting XYZ
+  //SERIAL_ECHOLNPGM("probe_at_point 3 doing blocking move to ", npos.x, ", ", npos.y);
   do_blocking_move_to(npos, feedRate_t(XY_PROBE_FEEDRATE_MM_S));
 
+  //SERIAL_ECHOLNPGM("probe_at_point 6");
   #if ENABLED(BD_SENSOR)
     return current_position.z - bdl.read(); // Difference between Z-home-relative Z and sensor reading
   #endif
 
   float measured_z = NAN;
+  //SERIAL_ECHOLNPGM("probe_at_point 7");
   if (!deploy()) {
-    measured_z = run_z_probe(sanity_check) + offset.z;
+    //SERIAL_ECHOLNPGM("-1 rx ", rx, " ry ", ry, " sanity check: ", sanity_check, " offset ", offset.z);
+    measured_z = run_z_probe(sanity_check, destination_z, number_of_probes) + offset.z;
+    if (isnan(measured_z)) {
+      //SERIAL_ECHOLNPGM("measured_z IS NAN");
+    }
+    //SERIAL_ECHOLNPGM("0 measured_z: ", measured_z);
     TERN_(HAS_PTC, ptc.apply_compensation(measured_z));
     TERN_(X_AXIS_TWIST_COMPENSATION, measured_z += xatc.compensation(npos + offset_xy));
   }
+  //SERIAL_ECHOLNPGM("1 measured_z: ", measured_z);
   if (!isnan(measured_z)) {
+    //SERIAL_ECHOLNPGM("measured_z IS NOT NAN");
     const bool big_raise = raise_after == PROBE_PT_BIG_RAISE;
     if (big_raise || raise_after == PROBE_PT_RAISE)
       do_blocking_move_to_z(current_position.z + (big_raise ? 25 : Z_CLEARANCE_BETWEEN_PROBES), z_probe_fast_mm_s);
@@ -902,15 +940,17 @@ float Probe::probe_at_point(const_float_t rx, const_float_t ry, const ProbePtRai
     if (verbose_level > 2)
       SERIAL_ECHOLNPGM("Bed X: ", LOGICAL_X_POSITION(rx), " Y: ", LOGICAL_Y_POSITION(ry), " Z: ", measured_z);
   }
+  //SERIAL_ECHOLNPGM("2 measured_z: ", measured_z);
 
   if (isnan(measured_z)) {
+    //SERIAL_ECHOLNPGM("measured_z IS NAN");
     stow();
     LCD_MESSAGE(MSG_LCD_PROBING_FAILED);
     #if DISABLED(G29_RETRY_AND_RECOVER)
       SERIAL_ERROR_MSG(STR_ERR_PROBING_FAILED);
     #endif
   }
-  DEBUG_ECHOLNPGM("measured_z: ", measured_z);
+  //DEBUG_ECHOLNPGM("measured_z: ", measured_z);
   return measured_z;
 }
 

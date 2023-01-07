@@ -263,6 +263,7 @@
  * M600 - Pause for filament change: "M600 X<pos> Y<pos> Z<raise> E<first_retract> L<later_retract>". (Requires ADVANCED_PAUSE_FEATURE)
  * M603 - Configure filament change: "M603 T<tool> U<unload_length> L<load_length>". (Requires ADVANCED_PAUSE_FEATURE)
  * M605 - Set Dual X-Carriage movement mode: "M605 S<mode> [X<x_offset>] [R<temp_offset>]". (Requires DUAL_X_CARRIAGE)
+ * M606 - Dab Deck Box Sides
  * M665 - Set delta configurations: "M665 H<delta height> L<diagonal rod> R<delta radius> S<segments/s> B<calibration radius> X<Alpha angle trim> Y<Beta angle trim> Z<Gamma angle trim> (Requires DELTA)
  *        Set SCARA configurations: "M665 S<segments-per-second> P<theta-psi-offset> T<theta-offset> Z<z-offset> (Requires MORGAN_SCARA or MP_SCARA)
  *        Set Polargraph draw area and belt length: "M665 S<segments-per-second> L<draw-area-left> R<draw-area-right> T<draw-area-top> B<draw-area-bottom> H<max-belt-length>"
@@ -526,6 +527,10 @@ private:
   #endif
 
   static void G28();
+  static void M1099();
+  static void M1199();
+  static void M1299();
+  static void M1399();
 
   #if HAS_LEVELING
     #if ENABLED(G29_RETRY_AND_RECOVER)

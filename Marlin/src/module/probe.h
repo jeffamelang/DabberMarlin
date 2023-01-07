@@ -120,15 +120,19 @@ public:
        *          nozzle must be be able to reach +10,-10.
        */
       static bool can_reach(const_float_t rx, const_float_t ry, const bool probe_relative=true) {
+        //SERIAL_ECHOLNPGM("can_reach, (rx,ry) (", rx, ",", ry, ") offset_xy = (", offset_xy.x, ",", offset_xy.y, "), probe_relative ", probe_relative, ", x (", min_x(), ",", max_x(), "), y (", min_y(), ",", max_y(), ")");
         if (probe_relative) {
           return position_is_reachable(rx - offset_xy.x, ry - offset_xy.y)
               && COORDINATE_OKAY(rx, min_x() - fslop, max_x() + fslop)
               && COORDINATE_OKAY(ry, min_y() - fslop, max_y() + fslop);
         }
         else {
-          return position_is_reachable(rx, ry)
-              && COORDINATE_OKAY(rx + offset_xy.x, min_x() - fslop, max_x() + fslop)
-              && COORDINATE_OKAY(ry + offset_xy.y, min_y() - fslop, max_y() + fslop);
+          //SERIAL_ECHOLNPGM("can_reach, position_reachable ", position_is_reachable(rx, ry), ", x okay ", COORDINATE_OKAY(rx + offset_xy.x, min_x() - fslop, max_x() + fslop), ", y okay ", COORDINATE_OKAY(ry + offset_xy.y, min_y() - fslop, max_y() + fslop));
+          return position_is_reachable(rx, ry);
+              //&& COORDINATE_OKAY(rx, min_x() - fslop, max_x() + fslop)
+              //&& COORDINATE_OKAY(ry, min_y() - fslop, max_y() + fslop);
+              //&& COORDINATE_OKAY(rx + offset_xy.x, min_x() - fslop, max_x() + fslop)
+              //&& COORDINATE_OKAY(ry + offset_xy.y, min_y() - fslop, max_y() + fslop);
         }
       }
 
@@ -139,9 +143,9 @@ public:
         do_z_clearance(Z_AFTER_PROBING, true); // Move down still permitted
       #endif
     }
-    static float probe_at_point(const_float_t rx, const_float_t ry, const ProbePtRaise raise_after=PROBE_PT_NONE, const uint8_t verbose_level=0, const bool probe_relative=true, const bool sanity_check=true);
-    static float probe_at_point(const xy_pos_t &pos, const ProbePtRaise raise_after=PROBE_PT_NONE, const uint8_t verbose_level=0, const bool probe_relative=true, const bool sanity_check=true) {
-      return probe_at_point(pos.x, pos.y, raise_after, verbose_level, probe_relative, sanity_check);
+    static float probe_at_point(const_float_t rx, const_float_t ry, const ProbePtRaise raise_after=PROBE_PT_NONE, const uint8_t verbose_level=0, const bool probe_relative=true, const bool sanity_check=true, const float destination_z=NAN, const int number_of_probes=2);
+    static float probe_at_point(const xy_pos_t &pos, const ProbePtRaise raise_after=PROBE_PT_NONE, const uint8_t verbose_level=0, const bool probe_relative=true, const bool sanity_check=true, const float destination_z=NAN, const int number_of_probes=2) {
+      return probe_at_point(pos.x, pos.y, raise_after, verbose_level, probe_relative, sanity_check, destination_z, number_of_probes);
     }
 
   #else
@@ -310,7 +314,7 @@ public:
 private:
   static bool probe_down_to_z(const_float_t z, const_feedRate_t fr_mm_s);
   static void do_z_raise(const float z_raise);
-  static float run_z_probe(const bool sanity_check=true);
+  static float run_z_probe(const bool sanity_check=true, const float destination_z=NAN, const int number_of_probes=2);
 };
 
 extern Probe probe;

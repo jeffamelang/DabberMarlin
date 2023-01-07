@@ -946,6 +946,11 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 605: M605(); break;                                  // M605: Set Dual X Carriage movement mode
       #endif
 
+      case 1099: M1099(); break;                                    // jeff's bed level check routine
+      case 1199: M1199(); break;                                    // jeff's purging routine
+      case 1299: M1299(); break;                                    // jeff's priming routine
+      case 1399: M1399(); break;                                    // jeff's staining routine
+
       #if IS_KINEMATIC
         case 665: M665(); break;                                  // M665: Set Kinematics parameters
       #endif
