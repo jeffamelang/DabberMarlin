@@ -627,7 +627,10 @@ enum Side { UNKNOWN, BASE_LEFT, BASE_RIGHT, BASE_BACK, BASE_FRONT, BASE_BOTTOM, 
 
 Side identify_side_from_surface_height(const double surface_height) {
   const std::map<Side, float> expected_surface_heights =
-    { {BASE_FRONT, 144.3} };
+    { 
+      {BASE_FRONT, 144.3},
+      {BASE_RIGHT, 146.8}
+     };
   const double tolerance = 0.5;
   for (auto e : expected_surface_heights) {
     if ((fabs(surface_height - e.second)) < tolerance) {
@@ -687,9 +690,9 @@ xy_pos_t multiply(const float scalar, const xy_pos_t vector) {
 }
 
 xy_pos_t find_edge(const xy_pos_t & starting_location, const xy_pos_t & probing_direction, const float surface_height, const float extra_depth) {
-  const float cruising_altitude = surface_height + 3.0;
-  const float edge_found_height = cruising_altitude - 2.5 - extra_depth;
-  const float step_size = 0.25;
+  const float cruising_altitude = surface_height + 2.0;
+  const float edge_found_height = surface_height - 0.5 - extra_depth;
+  const float step_size = 0.20;
   const int max_number_of_steps = 3.0/step_size;
   int step_number = 0;
   bool found_edge = false;
@@ -716,22 +719,44 @@ xy_pos_t find_edge(const xy_pos_t & starting_location, const xy_pos_t & probing_
 }
 
 xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height) {
-  const std::map<Side, xy_pos_t> probing_location_to_top_edge_initial_offsets = 
-    { {BASE_FRONT, {18, 13.2}} };
-  const std::map<Side, xy_pos_t> probing_location_to_left_edge_initial_offsets =
-    { {BASE_FRONT, {-22.0, -35}} };
-  const std::map<Side, float> extra_depth_left_side =
-    { {BASE_FRONT, 0.} };
-  const std::map<Side, float> extra_depth_top_side =
-    { {BASE_FRONT, 3.} };
-  const xy_pos_t top_edge = find_edge(probing_location + probing_location_to_top_edge_initial_offsets.find(side)->second, {0., 1.}, surface_height, extra_depth_top_side.find(side)->second);
-  const xy_pos_t left_edge = find_edge(probing_location + probing_location_to_left_edge_initial_offsets.find(side)->second, {-1., 0.}, surface_height, extra_depth_left_side.find(side)->second);
-  const float probe_diameter = 1.7;
-  const xy_pos_t probe_offset = {probe_diameter/2, -probe_diameter/2};
+  const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
+    { 
+      {BASE_FRONT, {18, 13.2}},
+      {BASE_RIGHT, {10, 10}} 
+    };
+  const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS =
+    { 
+      {BASE_FRONT, {-22.0, -35}},
+      {BASE_RIGHT, {-22.0, -15}} 
+    };
+  const std::map<Side, float> EXTRA_DEPTH_LEFT_SIDE =
+    { 
+      {BASE_FRONT, 0.},
+      {BASE_RIGHT, 0.}
+     };
+  const std::map<Side, float> EXTRA_DEPTH_TOP_SIDE =
+    { 
+      {BASE_FRONT, 3.},
+      {BASE_RIGHT, 0.} 
+      };
+  // Sometimes we can't reach the top left corner, such as for the base right.
+  // For that, we probe what we can, and use a hard-code offset from the 
+  // corner that we can probe to the actual corner.
+  const std::map<Side, xy_pos_t> AFTER_PROBING_CORNER_FIND_OFFSET =
+    { 
+      {BASE_FRONT, {0.0, 0.0}},
+      {BASE_RIGHT, {0.0, 3.0}} 
+    };
+  const xy_pos_t top_edge = find_edge(probing_location + PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second, {0., 1.}, surface_height, EXTRA_DEPTH_TOP_SIDE.find(side)->second);
+  const xy_pos_t left_edge = find_edge(probing_location + PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS.find(side)->second, {-1., 0.}, surface_height, EXTRA_DEPTH_LEFT_SIDE.find(side)->second);
   if (isnan(top_edge.x) || isnan(top_edge.y) || isnan(left_edge.x) || isnan(left_edge.y)) {
     return (xy_pos_t) {NAN, NAN};
   }
-  xy_pos_t upper_left_corner = {left_edge.x+probe_offset.x, top_edge.y+probe_offset.y};
+  const xy_pos_t probed_corner = {left_edge.x, top_edge.y};
+  SERIAL_ECHOLNPGM("Found probed corner of (", probed_corner.x, ",", probed_corner.y, ")");
+  const xy_pos_t probe_offset = {0.0, 0.0};
+  const xy_pos_t upper_left_corner = (xy_pos_t){left_edge.x, top_edge.y} + probe_offset + AFTER_PROBING_CORNER_FIND_OFFSET.find(side)->second;
+  SERIAL_ECHOLNPGM("With probe and hard-coded offsets, returning upper left corner of (", upper_left_corner.x, ",", upper_left_corner.y, ")");
   go_to_xy(upper_left_corner);
   return upper_left_corner;
 }
@@ -762,7 +787,6 @@ for each quadrant
 void GcodeSuite::M1399() { 
   G28();
   const double cruising_altitude = 160;
-  //const double cruising_altitude = 380;
 
   const int number_of_quadrants = 1;
   const int number_of_subquadrants = 1;
@@ -826,16 +850,18 @@ void GcodeSuite::M1399() {
       xy_pos_t probing_location = get_probing_location(quadrant, subquadrant);
       SERIAL_ECHOLNPGM("\n(", quadrant, ":", subquadrant, "), ==================== Looking for upper left corner ==================\n");
       xy_pos_t upper_left_corner = find_upper_left_corner(probing_location, quadrant_side, surface_height);
+      //xy_pos_t upper_left_corner = {29.7500,93.5000};
 
       if (isnan(upper_left_corner.x) || isnan(upper_left_corner.y)) {
         SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Could not find the upper left corner of this face, skipping.");
         continue;
       } 
 
-      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner, proceeding to dab.");
+      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner, proceeding to dab with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height);
       // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
       Dabber* dabber = new Dabber(upper_left_corner, surface_height);
       if (quadrant_side == BASE_RIGHT) {
+        SERIAL_ECHOLNPGM("starting to dab");
         dab_side_base_right(dabber);
       }
       go_to_z(cruising_altitude);

@@ -65,8 +65,20 @@
 // @section info
 
 // Author info of this build printed to the host during boot and M115
-#define STRING_CONFIG_H_AUTHOR "(jeff, DABBER2)" // Who made the changes.
-#define CUSTOM_VERSION_FILE Version.h // Path from the root directory (no quotes)
+#define STRING_CONFIG_H_AUTHOR "(jeff, DABBER)" // Who made the changes.
+// Name displayed in the LCD "Ready" message and Info menu
+#define CUSTOM_MACHINE_NAME "DABBER.0.0"
+//#define CUSTOM_VERSION_FILE Version.h // Path from the root directory (no quotes)
+#define SHORT_BUILD_VERSION "go dabber go"
+// Feedrate (mm/min) for the first approach when double-probing (MULTIPLE_PROBING == 2)
+#define Z_PROBE_FEEDRATE_FAST (5*60) // can't go faster or skip steps
+// Feedrate (mm/min) for the "accurate" probe of each point
+#define Z_PROBE_FEEDRATE_SLOW (Z_PROBE_FEEDRATE_FAST / 2)
+//#define Z_PROBE_FEEDRATE_SLOW (Z_PROBE_FEEDRATE_FAST / 3)
+// Homing speeds (linear=mm/min, rotational=°/min)
+#define HOMING_FEEDRATE_MM_M { (2*50*60), (2*50*60), (3*4*60) }
+#define NO_AUTO_ASSIGN_WARNING
+
 
 /**
  * *** VENDORS PLEASE READ ***
@@ -139,8 +151,6 @@
 // Enable the Bluetooth serial interface on AT90USB devices
 //#define BLUETOOTH
 
-// Name displayed in the LCD "Ready" message and Info menu
-#define CUSTOM_MACHINE_NAME "DABBER"
 
 // Printer's unique ID, used by some programs to differentiate between machines.
 // Choose your own or use a service like https://www.uuidgenerator.net/version4
@@ -1508,13 +1518,6 @@
 // X and Y axis travel speed (mm/min) between probes
 #define XY_PROBE_FEEDRATE (133*60)
 
-// Feedrate (mm/min) for the first approach when double-probing (MULTIPLE_PROBING == 2)
-#define Z_PROBE_FEEDRATE_FAST (2*60) // can't go faster or skip steps
-
-// Feedrate (mm/min) for the "accurate" probe of each point
-#define Z_PROBE_FEEDRATE_SLOW (Z_PROBE_FEEDRATE_FAST / 2)
-//#define Z_PROBE_FEEDRATE_SLOW (Z_PROBE_FEEDRATE_FAST / 3)
-
 /**
  * Probe Activation Switch
  * A switch indicating proper deployment, or an optical
@@ -1672,7 +1675,7 @@
 // @section extruder
 
 // For direct drive extruder v9 set to true, for geared extruder set to false.
-#define INVERT_E0_DIR true
+#define INVERT_E0_DIR false
 #define INVERT_E1_DIR false
 #define INVERT_E2_DIR false
 #define INVERT_E3_DIR false
@@ -2122,8 +2125,6 @@
   #define Z_SAFE_HOMING_Y_POINT Y_CENTER  // Y point for Z homing
 #endif
 
-// Homing speeds (linear=mm/min, rotational=°/min)
-#define HOMING_FEEDRATE_MM_M { (2*50*60), (2*50*60), (6*4*60) }
 
 // Validate that endstops are triggered on homing moves
 #define VALIDATE_HOMING_ENDSTOPS
