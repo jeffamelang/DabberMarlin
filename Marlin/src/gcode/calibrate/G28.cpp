@@ -709,6 +709,10 @@ xy_pos_t find_edge(const xy_pos_t & starting_location, const xy_pos_t & probing_
       ++step_number;
     }
   }
+  go_to_z(cruising_altitude);
+  go_to_xy(starting_location);
+  probe.deploy();
+  probe.stow();
   if (step_number > 0 && step_number < max_number_of_steps) {
     const xy_pos_t edge_location = starting_location + multiply(step_number * step_size, probing_direction);
     SERIAL_ECHOLNPGM("Returning edge location of (", edge_location.x, ",", edge_location.y, ")");
@@ -754,7 +758,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   }
   const xy_pos_t probed_corner = {left_edge.x, top_edge.y};
   SERIAL_ECHOLNPGM("Found probed corner of (", probed_corner.x, ",", probed_corner.y, ")");
-  const xy_pos_t probe_offset = {0.0, 0.0};
+  const xy_pos_t probe_offset = {1.0, -0.4};
   const xy_pos_t upper_left_corner = (xy_pos_t){left_edge.x, top_edge.y} + probe_offset + AFTER_PROBING_CORNER_FIND_OFFSET.find(side)->second;
   SERIAL_ECHOLNPGM("With probe and hard-coded offsets, returning upper left corner of (", upper_left_corner.x, ",", upper_left_corner.y, ")");
   go_to_xy(upper_left_corner);
@@ -864,7 +868,7 @@ void GcodeSuite::M1399() {
         SERIAL_ECHOLNPGM("starting to dab");
         dab_side_base_right(dabber);
       }
-      go_to_z(cruising_altitude);
+      go_to_z(400);
       delete dabber;
     }
   }
