@@ -758,7 +758,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   }
   const xy_pos_t probed_corner = {left_edge.x, top_edge.y};
   SERIAL_ECHOLNPGM("Found probed corner of (", probed_corner.x, ",", probed_corner.y, ")");
-  const xy_pos_t probe_offset = {1.0, -0.4};
+  const xy_pos_t probe_offset = {0.5, -0.7};
   const xy_pos_t upper_left_corner = (xy_pos_t){left_edge.x, top_edge.y} + probe_offset + AFTER_PROBING_CORNER_FIND_OFFSET.find(side)->second;
   SERIAL_ECHOLNPGM("With probe and hard-coded offsets, returning upper left corner of (", upper_left_corner.x, ",", upper_left_corner.y, ")");
   go_to_xy(upper_left_corner);
@@ -847,14 +847,14 @@ void GcodeSuite::M1399() {
         // There is no side here; move to the next one
         continue;
       }
-      float surface_height = subquadrant_probed_heights[subquadrant];
+      const float surface_height = subquadrant_probed_heights[subquadrant];
 
       // By this time, we've identified a side, and we're almost ready to 
       // start dabbing. First, we have to find the upper left corner. 
-      xy_pos_t probing_location = get_probing_location(quadrant, subquadrant);
+      const xy_pos_t probing_location = get_probing_location(quadrant, subquadrant);
       SERIAL_ECHOLNPGM("\n(", quadrant, ":", subquadrant, "), ==================== Looking for upper left corner ==================\n");
-      xy_pos_t upper_left_corner = find_upper_left_corner(probing_location, quadrant_side, surface_height);
-      //xy_pos_t upper_left_corner = {29.7500,93.5000};
+      const xy_pos_t upper_left_corner = find_upper_left_corner(probing_location, quadrant_side, surface_height);
+      //xy_pos_t upper_left_corner = {30.0000,93.8000};
 
       if (isnan(upper_left_corner.x) || isnan(upper_left_corner.y)) {
         SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Could not find the upper left corner of this face, skipping.");
@@ -863,7 +863,7 @@ void GcodeSuite::M1399() {
 
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner, proceeding to dab with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height);
       // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
-      Dabber* dabber = new Dabber(upper_left_corner, surface_height);
+      const Dabber* dabber = new Dabber(upper_left_corner, surface_height);
       if (quadrant_side == BASE_RIGHT) {
         SERIAL_ECHOLNPGM("starting to dab");
         dab_side_base_right(dabber);

@@ -30,11 +30,11 @@ private:
   const float _surface_height;
 
   static constexpr xy_pos_t PROBE_TO_NOZZLE_XY_OFFSET = {-30.25, 0};
-  static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = .4;
+  static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 1.0;
   static constexpr float APPROACH_FROM_Z_OFFSET = 1;
   static constexpr float CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET = 2;
-  static constexpr float RETRACTION_MM = 0.4;
   static constexpr float STAINING_EXTRUSION_MULTIPLIER = 9.0;
+  static constexpr float RETRACTION_MM = 1.0/STAINING_EXTRUSION_MULTIPLIER;
 
   void go_to_cruising_altitude() const {
     go_to_z_from_surface(CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET);
