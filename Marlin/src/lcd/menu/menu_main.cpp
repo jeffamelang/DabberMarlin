@@ -235,8 +235,8 @@ void menu_configuration();
 void menu_main() {
   const bool busy = printingIsActive()
     #if ENABLED(SDSUPPORT)
-      , card_detected = card.isMounted()
-      , card_open = card_detected && card.isFileOpen()
+      //, card_detected = card.isMounted()
+      //, card_open = card_detected && card.isFileOpen()
     #endif
   ;
 
@@ -248,37 +248,6 @@ void menu_main() {
     #if !defined(MEDIA_MENU_AT_TOP) && !HAS_ENCODER_WHEEL
       #define MEDIA_MENU_AT_TOP
     #endif
-
-    auto sdcard_menu_items = [&]{
-      #if ENABLED(MENU_ADDAUTOSTART)
-        ACTION_ITEM(MSG_RUN_AUTO_FILES, card.autofile_begin); // Run Auto Files
-      #endif
-
-      if (card_detected) {
-        if (!card_open) {
-          #if HAS_SD_DETECT
-            GCODES_ITEM(MSG_CHANGE_MEDIA, F("M21"));        // M21 Change Media
-          #else                                             // - or -
-            ACTION_ITEM(MSG_RELEASE_MEDIA, []{              // M22 Release Media
-              queue.inject(F("M22"));
-              #if ENABLED(TFT_COLOR_UI)
-                // Menu display issue on item removal with multi language selection menu
-                if (encoderTopLine > 0) encoderTopLine--;
-                ui.refresh(LCDVIEW_CALL_REDRAW_NEXT);
-              #endif
-            });
-          #endif
-          SUBMENU(MSG_MEDIA_MENU, MEDIA_MENU_GATEWAY);      // Media Menu (or Password First)
-        }
-      }
-      else {
-        #if HAS_SD_DETECT
-          ACTION_ITEM(MSG_NO_MEDIA, nullptr);               // "No Media"
-        #else
-          GCODES_ITEM(MSG_ATTACH_MEDIA, F("M21"));          // M21 Attach Media
-        #endif
-      }
-    };
 
   #endif
 
@@ -324,6 +293,10 @@ void menu_main() {
       SUBMENU(MSG_PREHEAT_CUSTOM, menu_preheat_only);
     #endif
 
+    GCODES_ITEM(MSG_STAIN_DRAGON_WOLF, F("M1399"));
+    GCODES_ITEM(MSG_PURGE_STAIN, F("M1199"));
+    GCODES_ITEM(MSG_PRIME_STAIN, F("M1299"));
+
     SUBMENU(MSG_MOTION, menu_motion);
   }
 
@@ -336,7 +309,7 @@ void menu_main() {
   #endif
 
   #if HAS_TEMPERATURE
-    SUBMENU(MSG_TEMPERATURE, menu_temperature);
+    //SUBMENU(MSG_TEMPERATURE, menu_temperature);
   #endif
 
   #if HAS_POWER_MONITOR
@@ -351,7 +324,7 @@ void menu_main() {
     if (!busy) SUBMENU(MSG_MMU2_MENU, menu_mmu2);
   #endif
 
-  SUBMENU(MSG_CONFIGURATION, menu_configuration);
+  //SUBMENU(MSG_CONFIGURATION, menu_configuration);
 
   #if ENABLED(CUSTOM_MENU_MAIN)
     if (TERN1(CUSTOM_MENU_MAIN_ONLY_IDLE, !busy)) {
@@ -364,11 +337,11 @@ void menu_main() {
   #endif
 
   #if ENABLED(LCD_INFO_MENU)
-    SUBMENU(MSG_INFO_MENU, menu_info);
+    //SUBMENU(MSG_INFO_MENU, menu_info);
   #endif
 
   #if EITHER(LED_CONTROL_MENU, CASE_LIGHT_MENU)
-    SUBMENU(MSG_LEDS, menu_led);
+    //SUBMENU(MSG_LEDS, menu_led);
   #endif
 
   //
@@ -390,7 +363,7 @@ void menu_main() {
   #endif
 
   #if ENABLED(SDSUPPORT) && DISABLED(MEDIA_MENU_AT_TOP)
-    sdcard_menu_items();
+    //sdcard_menu_items();
   #endif
 
   #if HAS_SERVICE_INTERVALS
@@ -462,7 +435,7 @@ void menu_main() {
   #endif
 
   #if ENABLED(ADVANCED_PAUSE_FEATURE) && DISABLED(DISABLE_ENCODER)
-    FILAMENT_CHANGE_ITEM();
+    //FILAMENT_CHANGE_ITEM();
   #endif
 
   END_MENU();

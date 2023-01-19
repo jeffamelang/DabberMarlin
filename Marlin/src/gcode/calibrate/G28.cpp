@@ -32,6 +32,8 @@
 #include "dab_side_base_right.h"
 #include "stain_utilities.h"
 #include <map>
+#include <vector>
+#include "../../core/millis_t.h"
 
 #if HAS_MULTI_HOTEND
         #include "../../module/tool_change.h"
@@ -689,49 +691,131 @@ xy_pos_t multiply(const float scalar, const xy_pos_t vector) {
     return (xy_pos_t) {scalar * vector.x, scalar * vector.y};
 }
 
+enum ProbeResult { NO_SURFACE, SURFACE, SURFACE_BUT_GOT_STUCK };
+
+ProbeResult probe_for_edge_at_point(const xy_pos_t & location, const float cruising_altitude, const float edge_found_height) {
+  do_blocking_move_to_xy_z(location, cruising_altitude);
+  millis_t start = millis();
+  const float probed_height = probe_at_point_to_height(location, edge_found_height);
+  millis_t stop = millis();
+  go_to_z(cruising_altitude);
+  float elapsedMillis = stop - start;
+  SERIAL_ECHOLNPGM("Probing took ", elapsedMillis, " millis, got height of ", probed_height);
+  bool stuck = elapsedMillis > 3700;
+  if (stuck) {
+    return ProbeResult::SURFACE_BUT_GOT_STUCK;
+  }
+  if (isnan(probed_height)) {
+    return ProbeResult::NO_SURFACE;
+  }
+  return ProbeResult::SURFACE;
+}
+
 xy_pos_t find_edge(const xy_pos_t & starting_location, const xy_pos_t & probing_direction, const float surface_height, const float extra_depth) {
+  SERIAL_ECHOLNPGM("Finding edge for start of ", starting_location.x, ",", starting_location.y);
   const float cruising_altitude = surface_height + 2.0;
   const float edge_found_height = surface_height - 0.5 - extra_depth;
-  const float step_size = 0.20;
-  const int max_number_of_steps = 3.0/step_size;
-  int step_number = 0;
-  bool found_edge = false;
-  while (step_number < max_number_of_steps && !found_edge) {
-    const xy_pos_t test_location = starting_location + multiply(step_number * step_size, probing_direction);
-    do_blocking_move_to_xy_z(test_location, cruising_altitude);
-    const float probed_height = probe_at_point_to_height(test_location, edge_found_height);
-    go_to_z(cruising_altitude);
-    found_edge = isnan(probed_height);
-    if (found_edge) {
-      SERIAL_ECHOLNPGM("Step ", step_number, ": testing location (", test_location.x, ",", test_location.y, ") FOUND THE EDGE");
-    } else {
-      SERIAL_ECHOLNPGM("Step ", step_number, ": testing location (", test_location.x, ",", test_location.y, ") found probed_height of ", probed_height);
-      ++step_number;
+
+  // First, make sure that the starting location sees the surface.
+  const ProbeResult starting_location_probe_result = probe_for_edge_at_point(starting_location, cruising_altitude, edge_found_height);
+  go_to_z(cruising_altitude);
+  if (!(starting_location_probe_result == ProbeResult::SURFACE || starting_location_probe_result == ProbeResult::SURFACE_BUT_GOT_STUCK)) {
+    SERIAL_ECHOLNPGM("Didn't find the surface at the starting location");
+    return {NAN, NAN};
+  }
+  const float step_sizes[4] = { 0.8, 0.4, 0.2, 0.1 };
+  const int number_of_step_sizes = sizeof(step_sizes)/sizeof(step_sizes[0]);
+  // current_offset is always assumed to be on the surface
+  float current_offset = 0;
+  const float MAX_ALLOWABLE_OFFSET = 8;
+  float known_no_surface_offset = MAX_ALLOWABLE_OFFSET;
+  for (int i = 0; i < number_of_step_sizes; ++i) {
+    const float step_size = step_sizes[i];
+    SERIAL_ECHOLNPGM("current offset of ", current_offset, ", starting step size of ", step_size);
+    bool stopped_seeing_surface = false;
+    while (!stopped_seeing_surface) {
+      if (current_offset > MAX_ALLOWABLE_OFFSET) {
+        return {NAN, NAN};
+      }
+      const float test_offset = current_offset + step_size;
+      if (test_offset > known_no_surface_offset - .01) {
+        SERIAL_ECHOLNPGM("Not testing offset of ", test_offset, " because we already know it doesn't see the surface");
+        stopped_seeing_surface = true;
+      } else {
+        const xy_pos_t test_location = starting_location + multiply(test_offset, probing_direction);
+        SERIAL_ECHOLNPGM("Trying test offset of ", test_offset, " and diffs of ", test_location.x - starting_location.x, ",", test_location.y - starting_location.y, " for start of ", starting_location.x, ",", starting_location.y);
+        const ProbeResult probe_result = probe_for_edge_at_point(test_location, cruising_altitude, edge_found_height);
+        // Get the probe to a safe height
+        go_to_z(cruising_altitude);
+        if (probe_result == ProbeResult::SURFACE_BUT_GOT_STUCK) {
+          SERIAL_ECHOLNPGM("Trying to fix probe at ", test_offset);
+          // Try to fix it
+          probe.deploy();
+          probe.stow();
+        } 
+        if (probe_result == ProbeResult::NO_SURFACE) {
+          SERIAL_ECHOLNPGM("Found no surface at ", test_offset);
+          known_no_surface_offset = std::min(known_no_surface_offset, test_offset);
+          stopped_seeing_surface = true;
+        } else {
+          SERIAL_ECHOLNPGM("Found the surface at ", test_offset);
+          current_offset = test_offset;
+        }
+      }
     }
   }
   go_to_z(cruising_altitude);
   go_to_xy(starting_location);
   probe.deploy();
   probe.stow();
-  if (step_number > 0 && step_number < max_number_of_steps) {
-    const xy_pos_t edge_location = starting_location + multiply(step_number * step_size, probing_direction);
-    SERIAL_ECHOLNPGM("Returning edge location of (", edge_location.x, ",", edge_location.y, ")");
-    return edge_location;
-  } else {
-    return {NAN, NAN};
+  const float final_offset = current_offset + step_sizes[3];
+  const xy_pos_t edge_location = starting_location + multiply(final_offset, probing_direction);
+  SERIAL_ECHOLNPGM("Returning with final offset of ", final_offset, " and edge location of (", edge_location.x, ",", edge_location.y, ")");
+  return edge_location;
+}
+
+std::vector<std::pair<xy_pos_t, float>> probe_leveling_points(const xy_pos_t & upper_left_corner, const Side side, const float surface_height) {
+  const float cruising_altitude = surface_height + 2;
+  const std::map<Side, std::vector<xy_pos_t>> MESH_LEVELING_POINTS = 
+    { 
+// 33 19,42,86
+// 64 15,48,86
+// 99 38, 86
+      {BASE_RIGHT, {
+        {3.4, -74.6},
+        {3.4, -51.6},
+        {3.4, -7.6},
+        {34.4, -78.6},
+        {34.4, -45.6},
+        {34.4, -7.6},
+        {69.4, -55.6},
+        {69.4, -7.6}
+      }}
+    };
+  const std::vector<xy_pos_t> leveling_points = MESH_LEVELING_POINTS.find(side)->second;
+  std::vector<std::pair<xy_pos_t, float>> probed_points;
+  SERIAL_ECHOLNPGM("Probing mesh leveling points");
+  go_to_z(cruising_altitude);
+  for (const xy_pos_t & unoffsetted_probing_location : leveling_points) {
+    const xy_pos_t probing_location = upper_left_corner + unoffsetted_probing_location;
+    const float surface_height = find_surface_height(probing_location);
+    SERIAL_ECHOLNPGM("For probing location (", probing_location.x, ",", probing_location.y, ") found height of ", surface_height);
+    probed_points.push_back(std::pair(unoffsetted_probing_location, surface_height));
+    go_to_z(cruising_altitude);
   }
+  return probed_points;
 }
 
 xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height) {
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
     { 
-      {BASE_FRONT, {18, 13.2}},
-      {BASE_RIGHT, {10, 10}} 
+      {BASE_FRONT, {18, 12.5}},
+      {BASE_RIGHT, {10, 9.5}} 
     };
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS =
     { 
-      {BASE_FRONT, {-22.0, -35}},
-      {BASE_RIGHT, {-22.0, -15}} 
+      {BASE_FRONT, {-21.5, -35}},
+      {BASE_RIGHT, {-21.5, -15}} 
     };
   const std::map<Side, float> EXTRA_DEPTH_LEFT_SIDE =
     { 
@@ -751,14 +835,17 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
       {BASE_FRONT, {0.0, 0.0}},
       {BASE_RIGHT, {0.0, 3.0}} 
     };
+  SERIAL_ECHOLNPGM("Finding top edge, offset is (", PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second.x, ",", PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second.y, ")");
   const xy_pos_t top_edge = find_edge(probing_location + PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second, {0., 1.}, surface_height, EXTRA_DEPTH_TOP_SIDE.find(side)->second);
+  SERIAL_ECHOLNPGM("Finding left edge");
   const xy_pos_t left_edge = find_edge(probing_location + PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS.find(side)->second, {-1., 0.}, surface_height, EXTRA_DEPTH_LEFT_SIDE.find(side)->second);
   if (isnan(top_edge.x) || isnan(top_edge.y) || isnan(left_edge.x) || isnan(left_edge.y)) {
+    SERIAL_ECHOLNPGM("Couldn't find upper left corner");
     return (xy_pos_t) {NAN, NAN};
   }
   const xy_pos_t probed_corner = {left_edge.x, top_edge.y};
   SERIAL_ECHOLNPGM("Found probed corner of (", probed_corner.x, ",", probed_corner.y, ")");
-  const xy_pos_t probe_offset = {0.5, -0.7};
+  const xy_pos_t probe_offset = {0.5, -0.3};
   const xy_pos_t upper_left_corner = (xy_pos_t){left_edge.x, top_edge.y} + probe_offset + AFTER_PROBING_CORNER_FIND_OFFSET.find(side)->second;
   SERIAL_ECHOLNPGM("With probe and hard-coded offsets, returning upper left corner of (", upper_left_corner.x, ",", upper_left_corner.y, ")");
   go_to_xy(upper_left_corner);
@@ -861,9 +948,11 @@ void GcodeSuite::M1399() {
         continue;
       } 
 
-      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner, proceeding to dab with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height);
+      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner at (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height, ", probing leveling points.");
+      const std::vector<std::pair<xy_pos_t, float>> probed_leveling_points = probe_leveling_points(upper_left_corner, quadrant_side, surface_height);
+      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY probed leveling points, proceeding to dab with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height);
       // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
-      const Dabber* dabber = new Dabber(upper_left_corner, surface_height);
+      const Dabber* dabber = new Dabber(upper_left_corner, surface_height, probed_leveling_points);
       if (quadrant_side == BASE_RIGHT) {
         SERIAL_ECHOLNPGM("starting to dab");
         dab_side_base_right(dabber);
@@ -939,7 +1028,16 @@ void GcodeSuite::M1099() {
 }
 
 // Purging
-void GcodeSuite::M1199() { }
+void GcodeSuite::M1199() {
+  const float feedrate_extrude_mm_s = 70;
+  const float purging_mm = 4000;
+  unscaled_e_move(9 * purging_mm, feedrate_extrude_mm_s);
+}
+
 
 // Priming
-void GcodeSuite::M1299() { }
+void GcodeSuite::M1299() {
+  const float feedrate_extrude_mm_s = 70;
+  const float purging_mm = 30;
+  unscaled_e_move(9 * purging_mm, feedrate_extrude_mm_s);
+}

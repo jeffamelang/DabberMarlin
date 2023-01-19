@@ -487,6 +487,9 @@ namespace Language_en {
   LSTR MSG_RESUME_PRINT                   = _UxGT("Resume Print");
   LSTR MSG_STOP_PRINT                     = _UxGT("Stop Print");
   LSTR MSG_OUTAGE_RECOVERY                = _UxGT("Power Outage");
+  LSTR MSG_STAIN_DRAGON_WOLF                   = _UxGT("Stain Dragon/Wolf");
+  LSTR MSG_PURGE_STAIN                   = _UxGT("Purge Whole Tube");
+  LSTR MSG_PRIME_STAIN                   = _UxGT("Pump a Little");
   #if LCD_WIDTH >= 20 || HAS_DWIN_E3V2
     LSTR MSG_HOST_START_PRINT             = _UxGT("Start Host Print");
     LSTR MSG_PRINTING_OBJECT              = _UxGT("Printing Object");
