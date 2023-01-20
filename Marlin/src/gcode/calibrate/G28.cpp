@@ -711,8 +711,58 @@ ProbeResult probe_for_edge_at_point(const xy_pos_t & location, const float cruis
   return ProbeResult::SURFACE;
 }
 
-xy_pos_t find_edge(const xy_pos_t & starting_location, const xy_pos_t & probing_direction, const float surface_height, const float extra_depth) {
-  SERIAL_ECHOLNPGM("Finding edge for start of ", starting_location.x, ",", starting_location.y);
+xy_pos_t find_edge_with_hint(const xy_pos_t & starting_location, const xy_pos_t & probing_direction, const float surface_height, const float extra_depth) {
+  SERIAL_ECHOLNPGM("Finding edge with hint for start of ", starting_location.x, ",", starting_location.y);
+  const float cruising_altitude = surface_height + 2.0;
+  const float edge_found_height = surface_height - 0.5 - extra_depth;
+
+  const float step_size = 0.1;
+  float edge_offset = 0;
+  int step = 0;
+  int iteration_number = 0;
+  int max_number_of_iterations = 20;
+  while (iteration_number < max_number_of_iterations) {
+    go_to_z(cruising_altitude);
+    const xy_pos_t probing_location = starting_location + multiply(step * step_size, probing_direction);
+    const ProbeResult probe_result = probe_for_edge_at_point(probing_location, cruising_altitude, edge_found_height);
+    if (step == 0) {
+      if (probe_result == ProbeResult::SURFACE || probe_result == ProbeResult::SURFACE_BUT_GOT_STUCK) {
+        step = 1;
+      } else {
+        step = -1;
+      }
+    } else if (step > 0) {
+      if (probe_result == ProbeResult::NO_SURFACE) {
+        edge_offset = step * step_size;
+        break;
+      }
+      SERIAL_ECHOLNPGM("with hint, nudging up");
+      step += 1;
+    } else if (step < 0) {
+      if (probe_result == ProbeResult::SURFACE || probe_result == ProbeResult::SURFACE_BUT_GOT_STUCK) {
+        edge_offset = (step + 1) * step_size;
+        break;
+      }
+      SERIAL_ECHOLNPGM("with hint, nudging down");
+      step -= 1;
+    }
+    ++iteration_number;
+  }
+  if (iteration_number == max_number_of_iterations) {
+    SERIAL_ECHOLNPGM("ERROR ran out of iterations in find_edge_with_hint, returning NANs");
+    return {NAN, NAN};
+  }
+  go_to_z(cruising_altitude);
+  go_to_xy(starting_location);
+  probe.deploy();
+  probe.stow();
+  const xy_pos_t edge_location = starting_location + multiply(edge_offset, probing_direction);
+  SERIAL_ECHOLNPGM("Returning with final offset of ", edge_offset, " and edge location of (", edge_location.x, ",", edge_location.y, ")");
+  return edge_location;
+}
+
+xy_pos_t find_edge_without_hint(const xy_pos_t & starting_location, const xy_pos_t & probing_direction, const float surface_height, const float extra_depth) {
+  SERIAL_ECHOLNPGM("Finding edge WITHOUT hint for start of ", starting_location.x, ",", starting_location.y);
   const float cruising_altitude = surface_height + 2.0;
   const float edge_found_height = surface_height - 0.5 - extra_depth;
 
@@ -731,7 +781,7 @@ xy_pos_t find_edge(const xy_pos_t & starting_location, const xy_pos_t & probing_
   float known_no_surface_offset = MAX_ALLOWABLE_OFFSET;
   for (int i = 0; i < number_of_step_sizes; ++i) {
     const float step_size = step_sizes[i];
-    SERIAL_ECHOLNPGM("current offset of ", current_offset, ", starting step size of ", step_size);
+    //SERIAL_ECHOLNPGM("current offset of ", current_offset, ", starting step size of ", step_size);
     bool stopped_seeing_surface = false;
     while (!stopped_seeing_surface) {
       if (current_offset > MAX_ALLOWABLE_OFFSET) {
@@ -739,26 +789,26 @@ xy_pos_t find_edge(const xy_pos_t & starting_location, const xy_pos_t & probing_
       }
       const float test_offset = current_offset + step_size;
       if (test_offset > known_no_surface_offset - .01) {
-        SERIAL_ECHOLNPGM("Not testing offset of ", test_offset, " because we already know it doesn't see the surface");
+        //SERIAL_ECHOLNPGM("Not testing offset of ", test_offset, " because we already know it doesn't see the surface");
         stopped_seeing_surface = true;
       } else {
         const xy_pos_t test_location = starting_location + multiply(test_offset, probing_direction);
-        SERIAL_ECHOLNPGM("Trying test offset of ", test_offset, " and diffs of ", test_location.x - starting_location.x, ",", test_location.y - starting_location.y, " for start of ", starting_location.x, ",", starting_location.y);
+        //SERIAL_ECHOLNPGM("Trying test offset of ", test_offset, " and diffs of ", test_location.x - starting_location.x, ",", test_location.y - starting_location.y, " for start of ", starting_location.x, ",", starting_location.y);
         const ProbeResult probe_result = probe_for_edge_at_point(test_location, cruising_altitude, edge_found_height);
         // Get the probe to a safe height
         go_to_z(cruising_altitude);
         if (probe_result == ProbeResult::SURFACE_BUT_GOT_STUCK) {
-          SERIAL_ECHOLNPGM("Trying to fix probe at ", test_offset);
+          //SERIAL_ECHOLNPGM("Trying to fix probe at ", test_offset);
           // Try to fix it
           probe.deploy();
           probe.stow();
         } 
         if (probe_result == ProbeResult::NO_SURFACE) {
-          SERIAL_ECHOLNPGM("Found no surface at ", test_offset);
+          //SERIAL_ECHOLNPGM("Found no surface at ", test_offset);
           known_no_surface_offset = std::min(known_no_surface_offset, test_offset);
           stopped_seeing_surface = true;
         } else {
-          SERIAL_ECHOLNPGM("Found the surface at ", test_offset);
+          //SERIAL_ECHOLNPGM("Found the surface at ", test_offset);
           current_offset = test_offset;
         }
       }
@@ -806,7 +856,7 @@ std::vector<std::pair<xy_pos_t, float>> probe_leveling_points(const xy_pos_t & u
   return probed_points;
 }
 
-xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height) {
+xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height, const xy_pos_t upper_left_corner_hint) {
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
     { 
       {BASE_FRONT, {18, 12.5}},
@@ -836,9 +886,26 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
       {BASE_RIGHT, {0.0, 3.0}} 
     };
   SERIAL_ECHOLNPGM("Finding top edge, offset is (", PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second.x, ",", PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second.y, ")");
-  const xy_pos_t top_edge = find_edge(probing_location + PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second, {0., 1.}, surface_height, EXTRA_DEPTH_TOP_SIDE.find(side)->second);
-  SERIAL_ECHOLNPGM("Finding left edge");
-  const xy_pos_t left_edge = find_edge(probing_location + PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS.find(side)->second, {-1., 0.}, surface_height, EXTRA_DEPTH_LEFT_SIDE.find(side)->second);
+  xy_pos_t top_edge = (xy_pos_t) {NAN, NAN};
+  const xy_pos_t top_edge_starting_location = probing_location + PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second;
+  if (!isnan(upper_left_corner_hint.y)) {
+    SERIAL_ECHOLNPGM("Finding top edge with hint");
+    const xy_pos_t top_edge_starting_location_with_hint = {top_edge_starting_location.x, upper_left_corner_hint.y};
+    top_edge = find_edge_with_hint(top_edge_starting_location_with_hint, {0., 1.}, surface_height, EXTRA_DEPTH_TOP_SIDE.find(side)->second);
+  } else {
+    SERIAL_ECHOLNPGM("Finding top edge WITHOUT hint");
+    top_edge = find_edge_without_hint(top_edge_starting_location, {0., 1.}, surface_height, EXTRA_DEPTH_TOP_SIDE.find(side)->second);
+  }
+  xy_pos_t left_edge = (xy_pos_t) {NAN, NAN};
+  const xy_pos_t left_edge_starting_location = probing_location + PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS.find(side)->second;
+  if (!isnan(upper_left_corner_hint.x)) {
+    SERIAL_ECHOLNPGM("Finding left edge with hint");
+    const xy_pos_t left_edge_starting_location_with_hint = {upper_left_corner_hint.x, left_edge_starting_location.y};
+    left_edge = find_edge_with_hint(left_edge_starting_location_with_hint, {-1., 0.}, surface_height, EXTRA_DEPTH_LEFT_SIDE.find(side)->second);
+  } else {
+    SERIAL_ECHOLNPGM("Finding left edge WITHOUT hint");
+    left_edge = find_edge_without_hint(left_edge_starting_location, {-1., 0.}, surface_height, EXTRA_DEPTH_LEFT_SIDE.find(side)->second);
+  }
   if (isnan(top_edge.x) || isnan(top_edge.y) || isnan(left_edge.x) || isnan(left_edge.y)) {
     SERIAL_ECHOLNPGM("Couldn't find upper left corner");
     return (xy_pos_t) {NAN, NAN};
@@ -932,6 +999,7 @@ void GcodeSuite::M1399() {
     SERIAL_ECHOLNPGM("Quadrant ", quadrant, ", found quadrant side of ", quadrant_side);
 
     // Now, gather data about each side in the quadrant.
+    std::vector<xy_pos_t> subquadrant_upper_left_corner_hints(4, {NAN, NAN});
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
       // Skip this side if we didn't find anything.
       if (isnan(surface_heights[quadrant][subquadrant])) {
@@ -944,7 +1012,17 @@ void GcodeSuite::M1399() {
       // start dabbing. First, we have to find the upper left corner. 
       const xy_pos_t probing_location = get_probing_location(quadrant, subquadrant);
       SERIAL_ECHOLNPGM("\n(", quadrant, ":", subquadrant, "), ==================== Looking for upper left corner ==================\n");
-      const xy_pos_t upper_left_corner = find_upper_left_corner(probing_location, quadrant_side, surface_height);
+      const xy_pos_t upper_left_corner = find_upper_left_corner(probing_location, quadrant_side, surface_height, subquadrant_upper_left_corner_hints[subquadrant]);
+      if (subquadrant == 0) {
+        subquadrant_upper_left_corner_hints[1].x = upper_left_corner.x;
+        subquadrant_upper_left_corner_hints[3].y = upper_left_corner.y;
+      }
+      if (subquadrant == 1) {
+        subquadrant_upper_left_corner_hints[2].y = upper_left_corner.y;
+      }
+      if (subquadrant == 2) {
+        subquadrant_upper_left_corner_hints[3].x = upper_left_corner.x;
+      }
       upper_left_corners[quadrant][subquadrant] = upper_left_corner;
       //xy_pos_t upper_left_corner = {30.0000,93.8000};
 
@@ -983,7 +1061,7 @@ void GcodeSuite::M1399() {
       const Dabber* dabber = new Dabber(upper_left_corner, surface_height, probing_points);
       if (quadrant_side == BASE_RIGHT) {
         SERIAL_ECHOLNPGM("Starting to dab a base right");
-        //dab_side_base_right(dabber);
+        dab_side_base_right(dabber);
       }
       delete dabber;
     }
