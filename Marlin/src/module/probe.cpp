@@ -750,6 +750,7 @@ float Probe::run_z_probe(const bool sanity_check/*=true*/, const float destinati
     // Raise to give the probe clearance
     //SERIAL_ECHOLNPGM("run_z_probe, raising to ", current_position.z + Z_CLEARANCE_MULTI_PROBE);
     do_blocking_move_to_z(current_position.z + Z_CLEARANCE_MULTI_PROBE, z_probe_fast_mm_s);
+    //SERIAL_ECHOLNPGM("JEFF run_z_probe, first_probe_z ", first_probe_z);
     if (number_of_probes == 1) {
       return first_probe_z;
     }
@@ -850,6 +851,7 @@ float Probe::run_z_probe(const bool sanity_check/*=true*/, const float destinati
 
     // Return a weighted average of the fast and slow probes
     const float measured_z = (z2 * 3.0 + first_probe_z * 2.0) * 0.2;
+    SERIAL_ECHOLNPGM("JEFF run_z_probe, difference in z is ", z2 - first_probe_z);
       //SERIAL_ECHOLNPGM("run_z_probe, measured_z is ", measured_z);
 
   #else

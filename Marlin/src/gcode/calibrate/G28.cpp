@@ -644,7 +644,7 @@ Side identify_side_from_surface_height(const double surface_height) {
 
 float find_surface_height(const xy_pos_t & position, const float stop_height) {
   go_to_xy(position);
-  return probe.probe_at_point(position, PROBE_PT_NONE, /*verbose_level=*/2, /*probe_relative=*/false, /*sanity_check=*/false, stop_height, /*number_of_probes=*/2);
+  return probe.probe_at_point(position, PROBE_PT_NONE, /*verbose_level=*/2, /*probe_relative=*/false, /*sanity_check=*/false, stop_height, /*number_of_probes=*/1);
 }
 
 float find_surface_height(const xy_pos_t & position) {
@@ -882,9 +882,12 @@ void GcodeSuite::M1399() {
   const int number_of_quadrants = 1;
   const int number_of_subquadrants = 1;
 
+  std::vector<Side> quadrant_sides(number_of_quadrants, Side::UNKNOWN);
+  std::vector<std::vector<float>> surface_heights(number_of_quadrants, std::vector<float>(number_of_subquadrants, NAN));
+  std::vector<std::vector<xy_pos_t>> upper_left_corners(number_of_quadrants, std::vector<xy_pos_t>(number_of_subquadrants, {NAN, NAN}));
+  std::vector<std::vector<std::vector<std::pair<xy_pos_t, float>>>> surface_probing_points(number_of_quadrants, std::vector<std::vector<std::pair<xy_pos_t, float>>>(number_of_subquadrants));
   for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
     // Try to identify all sides in this quadrant
-    float subquadrant_probed_heights[4] = {0., 0., 0., 0.};
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
       // Make sure we're at a safe altitude to move around without running into things.
       //SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Doing a blocking move to cruising altitude of ", cruising_altitude);
@@ -900,7 +903,7 @@ void GcodeSuite::M1399() {
         SERIAL_ECHOPGM(" ", surface_height);
       }
       SERIAL_EOL();
-      subquadrant_probed_heights[subquadrant] = surface_height;
+      surface_heights[quadrant][subquadrant] = surface_height;
     }
     // Make sure we're at a safe altitude to move around without running into things.
     go_to_z(cruising_altitude);
@@ -909,7 +912,7 @@ void GcodeSuite::M1399() {
     float probed_height_total = 0;
     int number_of_non_empty_sides = 0;
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
-      const float probed_height = subquadrant_probed_heights[subquadrant];
+      const float probed_height = surface_heights[quadrant][subquadrant];
       if (!isnan(probed_height)) {
         ++number_of_non_empty_sides;
         probed_height_total += probed_height;
@@ -921,26 +924,28 @@ void GcodeSuite::M1399() {
     }
     const float average_surface_height = probed_height_total / number_of_non_empty_sides;
     const Side quadrant_side = identify_side_from_surface_height(average_surface_height);
+    quadrant_sides[quadrant] = quadrant_side;
     if (quadrant_side == UNKNOWN) {
       SERIAL_ECHOLNPGM("Could not identify side from average surface height of ", average_surface_height, ", skipping the quadrant.");
       continue;
     }
     SERIAL_ECHOLNPGM("Quadrant ", quadrant, ", found quadrant side of ", quadrant_side);
 
-    // Now, dab each side in the quadrant.
+    // Now, gather data about each side in the quadrant.
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
       // Skip this side if we didn't find anything.
-      if (isnan(subquadrant_probed_heights[subquadrant])) {
+      if (isnan(surface_heights[quadrant][subquadrant])) {
         // There is no side here; move to the next one
         continue;
       }
-      const float surface_height = subquadrant_probed_heights[subquadrant];
+      const float surface_height = surface_heights[quadrant][subquadrant];
 
       // By this time, we've identified a side, and we're almost ready to 
       // start dabbing. First, we have to find the upper left corner. 
       const xy_pos_t probing_location = get_probing_location(quadrant, subquadrant);
       SERIAL_ECHOLNPGM("\n(", quadrant, ":", subquadrant, "), ==================== Looking for upper left corner ==================\n");
       const xy_pos_t upper_left_corner = find_upper_left_corner(probing_location, quadrant_side, surface_height);
+      upper_left_corners[quadrant][subquadrant] = upper_left_corner;
       //xy_pos_t upper_left_corner = {30.0000,93.8000};
 
       if (isnan(upper_left_corner.x) || isnan(upper_left_corner.y)) {
@@ -949,18 +954,44 @@ void GcodeSuite::M1399() {
       } 
 
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner at (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height, ", probing leveling points.");
-      const std::vector<std::pair<xy_pos_t, float>> probed_leveling_points = probe_leveling_points(upper_left_corner, quadrant_side, surface_height);
+      surface_probing_points[quadrant][subquadrant] = probe_leveling_points(upper_left_corner, quadrant_side, surface_height);
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY probed leveling points, proceeding to dab with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height);
-      // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
-      const Dabber* dabber = new Dabber(upper_left_corner, surface_height, probed_leveling_points);
-      if (quadrant_side == BASE_RIGHT) {
-        SERIAL_ECHOLNPGM("starting to dab");
-        dab_side_base_right(dabber);
+    }
+  }
+  SERIAL_ECHOLNPGM("\n\n----------------------------------");
+  SERIAL_ECHOLNPGM("Done with probing, moving on to dabbing");
+  SERIAL_ECHOLNPGM("----------------------------------\n");
+  // Now that we've done all of the measuring for the sides, start dabbing.
+  for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
+    const Side quadrant_side = quadrant_sides[quadrant];
+    if (quadrant_side == UNKNOWN) {
+      SERIAL_ECHOLNPGM("We weren't able to determine a side type for quadrant ", quadrant, ", so we're skipping it.");
+      continue;
+    }
+    for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
+      const float surface_height = surface_heights[quadrant][subquadrant];
+      const xy_pos_t upper_left_corner = upper_left_corners[quadrant][subquadrant];
+      const std::vector<std::pair<xy_pos_t, float>> & probing_points = surface_probing_points[quadrant][subquadrant];
+      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Dabbing with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height , " and ", probing_points.size(), " probing points");
+      // Skip this side if we don't have all the information
+      if (isnan(surface_height) || isnan(upper_left_corner.x) || isnan(upper_left_corner.y) || probing_points.size() == 0) {
+        SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), we seem to be missing some data, so we're skipping it.");
+        // There is no side here; move to the next one
+        continue;
       }
-      go_to_z(400);
+      // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
+      const Dabber* dabber = new Dabber(upper_left_corner, surface_height, probing_points);
+      if (quadrant_side == BASE_RIGHT) {
+        SERIAL_ECHOLNPGM("Starting to dab a base right");
+        //dab_side_base_right(dabber);
+      }
       delete dabber;
     }
   }
+  SERIAL_ECHOLNPGM("\n\n----------------------------------");
+  SERIAL_ECHOLNPGM("Done with dabbing! Dropping the bed.");
+  SERIAL_ECHOLNPGM("----------------------------------\n");
+  go_to_z(400);
 }
 
 void GcodeSuite::M1099() { 

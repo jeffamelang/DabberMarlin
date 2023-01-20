@@ -132,7 +132,7 @@ public:
     // Even if approach_from is the zero vector, this works
     go_to_xy_from_upper_left_corner(position + approach_from);
     // Extrude the stain for this dab
-    unretract_and_extrude_stain(extrusion_mm);
+    //unretract_and_extrude_stain(extrusion_mm);
     // Lower and do the actual dab
     const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT + offset_from_surface_height;
     if (!vector_is_zero(approach_from)) {
