@@ -630,8 +630,8 @@ enum Side { UNKNOWN, BASE_LEFT, BASE_RIGHT, BASE_BACK, BASE_FRONT, BASE_BOTTOM, 
 Side identify_side_from_surface_height(const double surface_height) {
   const std::map<Side, float> expected_surface_heights =
     { 
-      {BASE_FRONT, 144.3},
-      {BASE_RIGHT, 146.8}
+      {BASE_FRONT, 147.3},
+      {BASE_RIGHT, 149.8}
      };
   const double tolerance = 0.5;
   for (auto e : expected_surface_heights) {
@@ -648,7 +648,7 @@ float find_surface_height(const xy_pos_t & position, const float stop_height) {
 }
 
 float find_surface_height(const xy_pos_t & position) {
-  const float height_at_which_slot_is_empty = 125;
+  const float height_at_which_slot_is_empty = 128;
   return find_surface_height(position, height_at_which_slot_is_empty);
 }
 
@@ -659,7 +659,7 @@ float probe_at_point_to_height(const xy_pos_t & position, const float stop_heigh
 
 // bottom left is the first quadrant, then goes clockwise around
 xy_pos_t get_probing_location(const int quadrant, const int subquadrant) {
-  const xy_pos_t bottom_left_quadrant_probing_location = {52.0, 80.0};
+  const xy_pos_t bottom_left_quadrant_probing_location = {47.0, 80.0};
   const float quadrant_offsets[2] = {205.5, 205.0};
   const float subquadrant_offsets[2] = {98.2, 100.3};
   xy_pos_t probing_location = bottom_left_quadrant_probing_location;
@@ -947,7 +947,7 @@ void GcodeSuite::M1399() {
   const double cruising_altitude = 160;
 
   const int number_of_quadrants = 1;
-  const int number_of_subquadrants = 1;
+  const int number_of_subquadrants = 4;
 
   std::vector<Side> quadrant_sides(number_of_quadrants, Side::UNKNOWN);
   std::vector<std::vector<float>> surface_heights(number_of_quadrants, std::vector<float>(number_of_subquadrants, NAN));
@@ -1077,10 +1077,10 @@ void GcodeSuite::M1099() {
   const float cruising_altitude = 80;
   const xy_pos_t primary_probing_locations[4] = 
   {
-    {46, 15},
-    {46, 370},
-    {382, 370},
-    {382, 15},
+    {41, 15},
+    {41, 370},
+    {377, 370},
+    {377, 15},
   };
   const int number_of_primary_probing_locations = sizeof(primary_probing_locations)/sizeof(primary_probing_locations[0]);
   float primary_probing_location_heights[4] = {0., 0., 0., 0.};
@@ -1104,18 +1104,18 @@ void GcodeSuite::M1099() {
     const float average_height = (max_height + min_height)/2.;
     const xy_pos_t secondary_probing_locations[12] = 
     {
-      {46, 165},
-      {46, 220},
-      {176, 15},
-      {176, 165},
-      {176, 220},
-      {176, 370},
-      {253, 15},
-      {253, 165},
-      {253, 220},
-      {253, 370},
-      {382, 165},
-      {382, 220},
+      {41, 165},
+      {41, 220},
+      {171, 15},
+      {171, 165},
+      {171, 220},
+      {171, 370},
+      {248, 15},
+      {248, 165},
+      {248, 220},
+      {248, 370},
+      {377, 165},
+      {377, 220},
     };
     const int number_of_secondary_probing_locations = sizeof(secondary_probing_locations)/sizeof(secondary_probing_locations[0]);
     for (int i = 0; i < number_of_secondary_probing_locations; ++i) {
@@ -1140,7 +1140,7 @@ void GcodeSuite::M1099() {
 void GcodeSuite::M1199() {
   const float feedrate_extrude_mm_s = 70;
   const float purging_mm = 4000;
-  unscaled_e_move(9 * purging_mm, feedrate_extrude_mm_s);
+  unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
 }
 
 
@@ -1148,5 +1148,5 @@ void GcodeSuite::M1199() {
 void GcodeSuite::M1299() {
   const float feedrate_extrude_mm_s = 70;
   const float purging_mm = 30;
-  unscaled_e_move(9 * purging_mm, feedrate_extrude_mm_s);
+  unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
 }

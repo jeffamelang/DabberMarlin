@@ -67,7 +67,7 @@
 // Author info of this build printed to the host during boot and M115
 #define STRING_CONFIG_H_AUTHOR "(jeff, DABBER)" // Who made the changes.
 // Name displayed in the LCD "Ready" message and Info menu
-#define CUSTOM_MACHINE_NAME "DABBER.0.3"
+#define CUSTOM_MACHINE_NAME "DABBER.0.8"
 //#define CUSTOM_VERSION_FILE Version.h // Path from the root directory (no quotes)
 #define SHORT_BUILD_VERSION "aubrie's the best"
 // Feedrate (mm/min) for the first approach when double-probing (MULTIPLE_PROBING == 2)
@@ -845,8 +845,8 @@
  * Prevent a single extrusion longer than EXTRUDE_MAXLENGTH.
  * Note: For Bowden Extruders make this large enough to allow load/unload.
  */
-#define PREVENT_LENGTHY_EXTRUDE
-#define EXTRUDE_MAXLENGTH 500
+//#define PREVENT_LENGTHY_EXTRUDE
+//#define EXTRUDE_MAXLENGTH 5000
 
 //===========================================================================
 //======================== Thermal Runaway Protection =======================
