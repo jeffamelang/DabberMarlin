@@ -948,6 +948,7 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
 
       case 1099: M1099(); break;                                    // jeff's bed level check routine
       case 1199: M1199(); break;                                    // jeff's purging routine
+      case 1249: M1249(); break;                                    // jeff's priming routine
       case 1299: M1299(); break;                                    // jeff's priming routine
       case 1399: M1399(); break;                                    // jeff's staining routine
 

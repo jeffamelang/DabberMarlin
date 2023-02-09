@@ -489,7 +489,8 @@ namespace Language_en {
   LSTR MSG_OUTAGE_RECOVERY                = _UxGT("Power Outage");
   LSTR MSG_STAIN_DRAGON_WOLF                   = _UxGT("Stain Dragon/Wolf");
   LSTR MSG_PURGE_STAIN                   = _UxGT("Purge Whole Tube");
-  LSTR MSG_PRIME_STAIN                   = _UxGT("Pump a Little");
+  LSTR MSG_EXTRUDE_MEDIUM_STAIN                   = _UxGT("Pump a Medium");
+  LSTR MSG_PRIME_STAIN                   = _UxGT("Pump a Small");
   #if LCD_WIDTH >= 20 || HAS_DWIN_E3V2
     LSTR MSG_HOST_START_PRINT             = _UxGT("Start Host Print");
     LSTR MSG_PRINTING_OBJECT              = _UxGT("Printing Object");

@@ -5,7 +5,7 @@
 #include "../../module/planner.h"
 #include "../../module/motion.h"
 
-static constexpr float FEEDRATE_XY_MM_S = 100;
+static constexpr float FEEDRATE_XY_MM_S = 150;
 static constexpr float FEEDRATE_Z_MM_S = 25;
 static constexpr float FEEDRATE_EXTRUDE_MM_S = 70;
 
@@ -23,7 +23,7 @@ void go_to_z(const float z) {
 
 class Dabber {
 public:
-  static constexpr float PROBE_TO_NOZZLE_Z_OFFSET = -4.3;
+  static constexpr float PROBE_TO_NOZZLE_Z_OFFSET = -1.5;
 
 private:
   const xy_pos_t _upper_left_corner;
@@ -32,8 +32,9 @@ private:
   float _min_surface_height;
   float _max_surface_height;
 
-  static constexpr xy_pos_t PROBE_TO_NOZZLE_XY_OFFSET = {-30.25, 0};
-  static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 0.45;
+  static constexpr xy_pos_t PROBE_TO_NOZZLE_XY_OFFSET = {-25.25, 0};
+  //static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 0.45;
+  static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 0.35;
   static constexpr float APPROACH_FROM_Z_OFFSET = 1;
   static constexpr float CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET = 4;
   static constexpr float STAINING_EXTRUSION_MULTIPLIER = 9.0;
@@ -132,7 +133,7 @@ public:
     // Even if approach_from is the zero vector, this works
     go_to_xy_from_upper_left_corner(position + approach_from);
     // Extrude the stain for this dab
-    //unretract_and_extrude_stain(extrusion_mm);
+    unretract_and_extrude_stain(extrusion_mm);
     // Lower and do the actual dab
     const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT + offset_from_surface_height;
     if (!vector_is_zero(approach_from)) {
