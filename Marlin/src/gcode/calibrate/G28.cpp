@@ -631,7 +631,13 @@ enum Side { UNKNOWN, BASE_LEFT, BASE_RIGHT, BASE_BACK, BASE_FRONT, BASE_BOTTOM, 
 Side identify_side_from_surface_height(const double surface_height) {
   const std::map<Side, float> expected_surface_heights =
     { 
-      {BASE_FRONT, 141.3},
+      {LID_TOP, 119.5},
+      {LID_BACK, 150.2},
+      {LID_RIGHT, 149.2},
+      {LID_LEFT, 148.3},
+      {BASE_LEFT, 145.7},
+      {BASE_BACK, 143.3},
+      {BASE_FRONT, 151.2},
       {BASE_RIGHT, 144.0},
       {BASE_BOTTOM, 147.0}
      };
@@ -650,8 +656,17 @@ float find_surface_height(const xy_pos_t & position, const float stop_height) {
 }
 
 float find_surface_height(const xy_pos_t & position) {
-  const float height_at_which_slot_is_empty = 135;
+  const float height_at_which_slot_is_empty = 118;
   return find_surface_height(position, height_at_which_slot_is_empty);
+}
+
+float find_subquadrant_height(const xy_pos_t & position) {
+  const float height = find_surface_height(position);
+  // We're on the lid top, but unfortunately we're in an embossing. So, 
+  // jog a little to the side and try again.
+  if (!isnan(height) && height < 122) {
+    return find_surface_height(position + (xy_pos_t) {7.0, 0.0});
+  }
 }
 
 float probe_at_point_to_height(const xy_pos_t & position, const float stop_height) {
@@ -695,6 +710,24 @@ xy_pos_t multiply(const float scalar, const xy_pos_t vector) {
 }
 
 enum ProbeResult { NO_SURFACE, SURFACE, SURFACE_BUT_GOT_STUCK };
+
+void do_a_priming_dab(const Dabber & dabber, const Side side) {
+  // Relative to the upper left corner
+  const std::map<Side, xy_pos_t> SIDE_CENTER_OFFSETS =
+    {
+      {LID_TOP, {45, -45}},
+      {LID_BACK, {30, -10}},
+      {LID_RIGHT, {50, -15}},
+      {LID_LEFT, {15, -15}},
+      {BASE_LEFT, {30, -45}},
+      {BASE_BACK, {45, -45}},
+      {BASE_FRONT, {35, -4}},
+      {BASE_RIGHT, {45, -45}},
+      {BASE_BOTTOM, {45, -45}}
+      };
+  const float PRIMING_DAB_AMOUNT = 0.30;
+  dabber.dab(SIDE_CENTER_OFFSETS.find(side)->second, PRIMING_DAB_AMOUNT, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000});
+}
 
 ProbeResult probe_for_edge_at_point(const xy_pos_t & location, const float cruising_altitude, const float edge_found_height) {
   do_blocking_move_to_xy_z(location, cruising_altitude);
@@ -827,14 +860,92 @@ xy_pos_t find_edge_without_hint(const xy_pos_t & starting_location, const xy_pos
   return edge_location;
 }
 
-std::vector<std::pair<xy_pos_t, float>> probe_leveling_points(const xy_pos_t & upper_left_corner, const Side side, const float surface_height) {
+std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(const xy_pos_t & upper_left_corner, const Side side, const float surface_height) {
   const float cruising_altitude = surface_height + 2;
-  const std::map<Side, std::vector<xy_pos_t>> MESH_LEVELING_POINTS = 
+  const std::map<Side, std::map<double, std::vector<xy_pos_t>>> MESH_LEVELING_POINTS = 
     { 
-// 33 19,42,86
-// 64 15,48,86
-// 99 38, 86
-      {BASE_RIGHT, {
+      {LID_TOP,
+      {{0., {
+        {8, -8},
+        {8, -47},
+        {8, -86},
+        {45, -86},
+        {45, -35},
+        {45, -8},
+        {85, -9},
+        {89, -43},
+        {85, -83}
+      }}}},
+      {LID_BACK, 
+      {{0., {
+        {4.0, -4},
+        {4.0, -17.0},
+        {45.0, -17.0},
+        {45.0, -4.0},
+        {87.0, -4.0},
+        {87.0, -17.0}
+      }}}},
+      {LID_RIGHT, 
+      {{0., {
+        {4.0, -4},
+        {4.0, -28.0},
+        {56.0, -30.0},
+        {57.0, -3.0},
+        {83.0, -3.0},
+        {79.0, -37.0},
+        {78.0, -53.0}
+      }}}},
+      {LID_LEFT, 
+      {{0., {
+        {2.0, -3.5},
+        {5.0, -25.5},
+        {6.0, -57.5},
+        {31.5, -27.5},
+        {53.5, -3.5},
+        {84.5, -18.5}
+      }}}},
+      {BASE_LEFT, 
+      {{0., {
+        {5.0, -5.0},
+        {5.0, -38.0},
+        {5.0, -82.0},
+        {36.0, -82.0},
+        {36.0, -42.0},
+        {36.0, -5.0},
+        {68.0, -33.5},
+        {68.0, -82.0}
+      }}}},
+      {BASE_BACK, 
+      {{0., {
+        {5.0, -5.0},
+        {3.0, -40.0},
+        {5.0, -87.0},
+        {34.0, -84.0},
+        {51.0, -42.0},
+        {43.0, -7.0},
+        {75.0, -7.0},
+        {78.0, -43.0},
+        {75.0, -84.0}
+      }}}},
+      {BASE_FRONT, 
+      {{0., {
+        {90.0, -13.0},
+        {45.0, -13.0},
+        {3.0, -13.0},
+        {3.0, -48.0},
+        {3.0, -79.0},
+        {45.0, -79.0},
+        {90.0, -79.0}
+      }},
+       {-3.0, {
+        {65.0, -88.0},
+        {3.0, -88.0},
+        {3.0, -2.0},
+        {65.0, -2.0},
+      }},
+      }},
+      {BASE_RIGHT, 
+      {{0., {
         {3.4, -7.6},
         {3.4, -51.6},
         {3.4, -74.6},
@@ -843,8 +954,9 @@ std::vector<std::pair<xy_pos_t, float>> probe_leveling_points(const xy_pos_t & u
         {34.4, -7.6},
         {69.4, -7.6},
         {69.4, -55.6}
-      }},
-      {BASE_BOTTOM, {
+      }}}},
+      {BASE_BOTTOM,
+      {{0., {
         {8, -8},
         {8, -47},
         {8, -86},
@@ -854,44 +966,74 @@ std::vector<std::pair<xy_pos_t, float>> probe_leveling_points(const xy_pos_t & u
         {83, -8},
         {83, -47},
         {83, -86}
-      }}
+      }}}}
     };
-  const std::vector<xy_pos_t> leveling_points = MESH_LEVELING_POINTS.find(side)->second;
-  std::vector<std::pair<xy_pos_t, float>> probed_points;
-  SERIAL_ECHOLNPGM("Probing mesh leveling points");
-  go_to_z(cruising_altitude);
-  for (const xy_pos_t & unoffsetted_probing_location : leveling_points) {
-    const xy_pos_t probing_location = upper_left_corner + unoffsetted_probing_location;
-    const float surface_height = find_surface_height(probing_location);
-    SERIAL_ECHOLNPGM("For probing location (", probing_location.x, ",", probing_location.y, ") found height of ", surface_height);
-    probed_points.push_back(std::pair(unoffsetted_probing_location, surface_height));
+  const std::map<double, std::vector<xy_pos_t>> all_elevations_leveling_points = MESH_LEVELING_POINTS.find(side)->second;
+  std::map<double, std::vector<std::pair<xy_pos_t, float>>> all_elevations_probed_points;
+  for(auto iter = all_elevations_leveling_points.begin(); iter != all_elevations_leveling_points.end(); ++iter) {
+    double elevation =  iter->first;
+    const std::vector<xy_pos_t> leveling_points = iter->second;
+    std::vector<std::pair<xy_pos_t, float>> probed_points;
+    SERIAL_ECHOLNPGM("Probing mesh leveling points");
     go_to_z(cruising_altitude);
+    for (const xy_pos_t & unoffsetted_probing_location : leveling_points) {
+      const xy_pos_t probing_location = upper_left_corner + unoffsetted_probing_location;
+      const float surface_height = find_surface_height(probing_location);
+      SERIAL_ECHOLNPGM("For probing location (", probing_location.x, ",", probing_location.y, ") found height of ", surface_height);
+      probed_points.push_back(std::pair(unoffsetted_probing_location, surface_height));
+      go_to_z(cruising_altitude);
+    }
+    all_elevations_probed_points[elevation] = probed_points;
   }
-  return probed_points;
+  return all_elevations_probed_points;
 }
 
 xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height, const xy_pos_t upper_left_corner_hint) {
   const xy_pos_t PROBE_OFFSET = {0.5, -0.5};
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
     { 
+      {LID_TOP, {2, 10.0}},
+      {LID_BACK, {2, 10.0}},
+      {LID_RIGHT, {2, 10.0}},
+      {LID_LEFT, {10, 10.0}},
+      {BASE_LEFT, {2, 10.0}},
+      {BASE_BACK, {2, 10.0}},
       {BASE_FRONT, {10, 10.0}},
       {BASE_RIGHT, {2, 7.0}},
       {BASE_BOTTOM, {2, 10.0}} 
     };
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS =
     { 
+      {LID_TOP, {-30.0, -17}},
+      {LID_BACK, {-30.0, 0}},
+      {LID_RIGHT, {-24.8, -5}},
+      {LID_LEFT, {-30.0, -15}},
+      {BASE_LEFT, {-30.0, -30}},
+      {BASE_BACK, {-30.0, -30}},
       {BASE_FRONT, {-30.0, -37}},
       {BASE_RIGHT, {-30.0, -17}},
       {BASE_BOTTOM, {-30.0, -17}} 
     };
   const std::map<Side, float> EXTRA_DEPTH_LEFT_SIDE =
     { 
+      {LID_TOP, 0.},
+      {LID_BACK, 0.},
+      {LID_RIGHT, 0.},
+      {LID_LEFT, 0.},
+      {BASE_LEFT, 0.},
+      {BASE_BACK, 0.},
       {BASE_FRONT, 0.},
       {BASE_RIGHT, 0.},
       {BASE_BOTTOM, 0.}
      };
   const std::map<Side, float> EXTRA_DEPTH_TOP_SIDE =
     { 
+      {LID_TOP, 0.},
+      {LID_BACK, 0.},
+      {LID_RIGHT, 0.},
+      {LID_LEFT, 0.},
+      {BASE_LEFT, 0.},
+      {BASE_BACK, 0.},
       {BASE_FRONT, 3.},
       {BASE_RIGHT, 0.},
       {BASE_BOTTOM, 0.} 
@@ -901,6 +1043,12 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   // corner that we can probe to the actual corner.
   const std::map<Side, xy_pos_t> AFTER_PROBING_CORNER_FIND_OFFSET =
     { 
+      {LID_TOP, {0.0, 0.0}},
+      {LID_BACK, {0.0, 0.0}},
+      {LID_RIGHT, {0.0, 0.0}},
+      {LID_LEFT, {0.0, 0.0}},
+      {BASE_LEFT, {0.0, 0.0}},
+      {BASE_BACK, {0.0, 0.0}},
       {BASE_FRONT, {0.0, 0.0}},
       {BASE_RIGHT, {0.0, 3.0}},
       {BASE_BOTTOM, {0.0, 0.0}} 
@@ -972,7 +1120,7 @@ void GcodeSuite::M1399() {
   std::vector<Side> quadrant_sides(number_of_quadrants, Side::UNKNOWN);
   std::vector<std::vector<float>> surface_heights(number_of_quadrants, std::vector<float>(number_of_subquadrants, NAN));
   std::vector<std::vector<xy_pos_t>> upper_left_corners(number_of_quadrants, std::vector<xy_pos_t>(number_of_subquadrants, {NAN, NAN}));
-  std::vector<std::vector<std::vector<std::pair<xy_pos_t, float>>>> surface_probing_points(number_of_quadrants, std::vector<std::vector<std::pair<xy_pos_t, float>>>(number_of_subquadrants));
+  std::vector<std::vector<std::map<double, std::vector<std::pair<xy_pos_t, float>>>>> surface_probing_points(number_of_quadrants, std::vector<std::map<double, std::vector<std::pair<xy_pos_t, float>>>>(number_of_subquadrants));
   for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
     // Try to identify all sides in this quadrant
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
@@ -982,7 +1130,7 @@ void GcodeSuite::M1399() {
       // Determine the probing location and probe
       const xy_pos_t probing_location = get_probing_location(quadrant, subquadrant);
       //SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Finding surface height at probing_location of (", probing_location.x, ", ", probing_location.y, ")");
-      const float surface_height = find_surface_height(probing_location);
+      const float surface_height = find_subquadrant_height(probing_location);
       SERIAL_ECHOPGM("(", quadrant, ":", subquadrant, "), Found surface height of");
       if (isnan(surface_height)) {
         SERIAL_ECHOPGM(" NO SIDE");
@@ -1060,6 +1208,7 @@ void GcodeSuite::M1399() {
   SERIAL_ECHOLNPGM("Done with probing, moving on to dabbing");
   SERIAL_ECHOLNPGM("----------------------------------\n");
   // Now that we've done all of the measuring for the sides, start dabbing.
+  bool already_stained_first_side = false;
   for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
     const Side quadrant_side = quadrant_sides[quadrant];
     if (quadrant_side == UNKNOWN) {
@@ -1069,16 +1218,21 @@ void GcodeSuite::M1399() {
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
       const float surface_height = surface_heights[quadrant][subquadrant];
       const xy_pos_t upper_left_corner = upper_left_corners[quadrant][subquadrant];
-      const std::vector<std::pair<xy_pos_t, float>> & probing_points = surface_probing_points[quadrant][subquadrant];
-      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Dabbing with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height , " and ", probing_points.size(), " probing points");
+      const std::map<double, std::vector<std::pair<xy_pos_t, float>>> & all_elevations_probing_points = surface_probing_points[quadrant][subquadrant];
+      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Dabbing with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height , " and ", all_elevations_probing_points.size(), " probing point elevations");
       // Skip this side if we don't have all the information
-      if (isnan(surface_height) || isnan(upper_left_corner.x) || isnan(upper_left_corner.y) || probing_points.size() == 0) {
+      if (isnan(surface_height) || isnan(upper_left_corner.x) || isnan(upper_left_corner.y) || all_elevations_probing_points.size() == 0) {
         SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), we seem to be missing some data, so we're skipping it.");
         // There is no side here; move to the next one
         continue;
       }
+      continue;
       // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
-      const Dabber* dabber = new Dabber(upper_left_corner, surface_height, probing_points);
+      const Dabber* dabber = new Dabber(upper_left_corner, surface_height, all_elevations_probing_points);
+      if (!already_stained_first_side) {
+        do_a_priming_dab(*dabber, quadrant_side);
+        already_stained_first_side = true;
+      }
       switch (quadrant_side) {
         case BASE_RIGHT:
           SERIAL_ECHOLNPGM("Starting to dab a base right");
@@ -1097,7 +1251,7 @@ void GcodeSuite::M1399() {
   SERIAL_ECHOLNPGM("\n\n----------------------------------");
   SERIAL_ECHOLNPGM("Done with dabbing! Dropping the bed.");
   SERIAL_ECHOLNPGM("----------------------------------\n");
-  go_to_z(400);
+  //go_to_z(400);
 }
 
 void GcodeSuite::M1099() { 
