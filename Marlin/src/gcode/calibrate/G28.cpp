@@ -631,17 +631,18 @@ enum Side { UNKNOWN, BASE_LEFT, BASE_RIGHT, BASE_BACK, BASE_FRONT, BASE_BOTTOM, 
 Side identify_side_from_surface_height(const double surface_height) {
   const std::map<Side, float> expected_surface_heights =
     { 
+      {LID_FRONT, 151.9},
       {LID_TOP, 119.5},
       {LID_BACK, 150.2},
       {LID_RIGHT, 149.2},
       {LID_LEFT, 148.3},
       {BASE_LEFT, 145.7},
       {BASE_BACK, 143.3},
-      {BASE_FRONT, 151.2},
+      {BASE_FRONT, 151.0},
       {BASE_RIGHT, 144.0},
       {BASE_BOTTOM, 147.0}
      };
-  const double tolerance = 0.5;
+  const double tolerance = 0.4;
   for (auto e : expected_surface_heights) {
     if ((fabs(surface_height - e.second)) < tolerance) {
       return e.first;
@@ -665,8 +666,10 @@ float find_subquadrant_height(const xy_pos_t & position) {
   // We're on the lid top, but unfortunately we're in an embossing. So, 
   // jog a little to the side and try again.
   if (!isnan(height) && height < 122) {
+    SERIAL_ECHOLNPGM("Found a subquadrant height of ", height, " which we think is a lid top, so we're jogging a little and trying again.");
     return find_surface_height(position + (xy_pos_t) {7.0, 0.0});
   }
+  return height;
 }
 
 float probe_at_point_to_height(const xy_pos_t & position, const float stop_height) {
@@ -715,6 +718,7 @@ void do_a_priming_dab(const Dabber & dabber, const Side side) {
   // Relative to the upper left corner
   const std::map<Side, xy_pos_t> SIDE_CENTER_OFFSETS =
     {
+      {LID_FRONT, {40, -3}},
       {LID_TOP, {45, -45}},
       {LID_BACK, {30, -10}},
       {LID_RIGHT, {50, -15}},
@@ -864,6 +868,17 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
   const float cruising_altitude = surface_height + 2;
   const std::map<Side, std::map<double, std::vector<xy_pos_t>>> MESH_LEVELING_POINTS = 
     { 
+      {LID_FRONT, 
+      {{0., {
+        {80.0, -4.4},
+        {46.0, -4.4},
+        {12.0, -4.4}
+      }},
+       {-5.4, {
+        {5.6, -17.4},
+        {87.6, -17.4}
+      }},
+      }},
       {LID_TOP,
       {{0., {
         {8, -8},
@@ -992,6 +1007,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   const xy_pos_t PROBE_OFFSET = {0.5, -0.5};
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
     { 
+      {LID_FRONT, {0, 4.5}},
       {LID_TOP, {2, 10.0}},
       {LID_BACK, {2, 10.0}},
       {LID_RIGHT, {2, 10.0}},
@@ -1004,6 +1020,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
     };
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS =
     { 
+      {LID_FRONT, {-30.0, -20}},
       {LID_TOP, {-30.0, -17}},
       {LID_BACK, {-30.0, 0}},
       {LID_RIGHT, {-24.8, -5}},
@@ -1016,6 +1033,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
     };
   const std::map<Side, float> EXTRA_DEPTH_LEFT_SIDE =
     { 
+      {LID_FRONT, 5.5},
       {LID_TOP, 0.},
       {LID_BACK, 0.},
       {LID_RIGHT, 0.},
@@ -1028,6 +1046,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
      };
   const std::map<Side, float> EXTRA_DEPTH_TOP_SIDE =
     { 
+      {LID_FRONT, 0.},
       {LID_TOP, 0.},
       {LID_BACK, 0.},
       {LID_RIGHT, 0.},
@@ -1043,6 +1062,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   // corner that we can probe to the actual corner.
   const std::map<Side, xy_pos_t> AFTER_PROBING_CORNER_FIND_OFFSET =
     { 
+      {LID_FRONT, {0.0, 0.0}},
       {LID_TOP, {0.0, 0.0}},
       {LID_BACK, {0.0, 0.0}},
       {LID_RIGHT, {0.0, 0.0}},
@@ -1164,7 +1184,7 @@ void GcodeSuite::M1399() {
       SERIAL_ECHOLNPGM("Could not identify side from average surface height of ", average_surface_height, ", skipping the quadrant.");
       continue;
     }
-    SERIAL_ECHOLNPGM("Quadrant ", quadrant, ", found quadrant side of ", quadrant_side);
+    SERIAL_ECHOLNPGM("Quadrant ", quadrant, ", from average surface height of ", average_surface_height, ", found quadrant side of ", quadrant_side);
 
     // Now, gather data about each side in the quadrant.
     std::vector<xy_pos_t> subquadrant_upper_left_corner_hints(4, {NAN, NAN});
@@ -1192,7 +1212,6 @@ void GcodeSuite::M1399() {
         subquadrant_upper_left_corner_hints[3].x = upper_left_corner.x;
       }
       upper_left_corners[quadrant][subquadrant] = upper_left_corner;
-      //xy_pos_t upper_left_corner = {30.0000,93.8000};
 
       if (isnan(upper_left_corner.x) || isnan(upper_left_corner.y)) {
         SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Could not find the upper left corner of this face, skipping.");
