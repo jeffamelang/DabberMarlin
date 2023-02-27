@@ -39,9 +39,10 @@ private:
   static constexpr float CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET = 4;
   static constexpr float STAINING_EXTRUSION_MULTIPLIER = 9.0;
   static constexpr float RETRACTION_MM = 0.0/STAINING_EXTRUSION_MULTIPLIER;
+  static constexpr float NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH = 0.25;
 
-  void go_to_cruising_altitude(const xy_pos_t position) const {
-    go_to_z_from_surface(position, CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET);
+  void go_to_cruising_altitude() const {
+    go_to_z(_max_surface_height + CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET);
   }
   
   void extrude_stain(const float extrusion_mm) const {
@@ -72,12 +73,18 @@ private:
     return _upper_left_corner + PROBE_TO_NOZZLE_XY_OFFSET + position;
   }
   
-  float interpolate_surface_height(const xy_pos_t position, const float elevation) const {
+  float interpolate_surface_height(const xy_pos_t position, const float surface_offset_from_zero_height) const {
+    //SERIAL_ECHOLNPGM("interpolating surface height for position of (", position.x, ", ", position.y, ") and surface offset of ", surface_offset_from_zero_height);
     float sum_of_inverse_squared_distances = 0;
     float total_surface_height = 0;
+    //SERIAL_ECHOLNPGM("testing ", _all_elevations_probed_surface_heights.size(), " entries.");
     for (auto iter = _all_elevations_probed_surface_heights.begin(); iter != _all_elevations_probed_surface_heights.end(); ++iter) {
+      //SERIAL_ECHOLNPGM("testing an entry in the probed surface heights");
       const std::vector<std::pair<xy_pos_t, float>> & this_elevations_probed_surface_heights = iter->second;
-      if (std::fabs(elevation - iter->first) < 0.01) {
+      //SERIAL_ECHOLNPGM("entry with surface offset ", iter->first, " has ", this_elevations_probed_surface_heights.size(), " points");
+      if (std::fabs(surface_offset_from_zero_height - iter->first) < 0.1) {
+        //SERIAL_ECHOLNPGM("entry has the right surface offset of ", surface_offset_from_zero_height);
+        //SERIAL_ECHOLNPGM("entry has ", this_elevations_probed_surface_heights.size(), " points");
         for (unsigned int i = 0; i < this_elevations_probed_surface_heights.size(); ++i) {
           float diff_x = this_elevations_probed_surface_heights[i].first.x - position.x;
           float diff_y = this_elevations_probed_surface_heights[i].first.y - position.y;
@@ -100,20 +107,20 @@ private:
     }
   }
   
-  float calculate_z(const xy_pos_t position, const float z) const {
-    return interpolate_surface_height(position, z) + PROBE_TO_NOZZLE_Z_OFFSET + z;
+  float calculate_z(const xy_pos_t position, const float z, const float surface_offset_from_zero_height) const {
+    return interpolate_surface_height(position, surface_offset_from_zero_height) + PROBE_TO_NOZZLE_Z_OFFSET + z;
   }
   
   void go_to_xy_from_upper_left_corner(const xy_pos_t position) const {
     go_to_xy(calculate_xy(position));
   }
 
-  void go_to_xy_z_from_upper_left_corner(const xy_pos_t position, const float z) const {
-    go_to_xy_z(calculate_xy(position), calculate_z(position, z));
+  void go_to_xy_z_from_upper_left_corner(const xy_pos_t position, const float z, const float surface_offset_from_zero_height) const {
+    go_to_xy_z(calculate_xy(position), calculate_z(position, z, surface_offset_from_zero_height));
   }
 
-  void go_to_z_from_surface(const xy_pos_t position, const float z) const {
-    const float surface_z = calculate_z(position, z);
+  void go_to_z_from_surface(const xy_pos_t position, const float z, const float surface_offset_from_zero_height) const {
+    const float surface_z = calculate_z(position, z, surface_offset_from_zero_height);
     go_to_z(surface_z);
   }
 
@@ -134,27 +141,28 @@ public:
     }
   }
 
-  void dab(const xy_pos_t position, const float extrusion_mm, const float offset_from_surface_height, const xy_pos_t post_dab_scoot, const xy_pos_t approach_from) const {
+  void dab(const xy_pos_t position, const float extrusion_mm, const float surface_offset_from_zero_height, const xy_pos_t post_dab_scoot, const xy_pos_t approach_from, const bool is_a_boundary_dab) const {
     // Make sure we're at cruising altitude
-    go_to_cruising_altitude(position);
+    go_to_cruising_altitude();
     // Even if approach_from is the zero vector, this works
     go_to_xy_from_upper_left_corner(position + approach_from);
     // Extrude the stain for this dab
     unretract_and_extrude_stain(extrusion_mm);
     // Lower and do the actual dab
-    const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT + offset_from_surface_height;
+    const float embossing_extra_depth = is_a_boundary_dab ? 0 : NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH;
+    const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT + surface_offset_from_zero_height - embossing_extra_depth;
     if (!vector_is_zero(approach_from)) {
-      go_to_z_from_surface(position, dabbing_height + APPROACH_FROM_Z_OFFSET + vector_magnitude(approach_from));
-      go_to_xy_z_from_upper_left_corner(position, dabbing_height + APPROACH_FROM_Z_OFFSET);
+      go_to_z_from_surface(position, dabbing_height + APPROACH_FROM_Z_OFFSET + vector_magnitude(approach_from), surface_offset_from_zero_height);
+      go_to_xy_z_from_upper_left_corner(position, dabbing_height + APPROACH_FROM_Z_OFFSET, surface_offset_from_zero_height);
     }
-    go_to_z_from_surface(position, dabbing_height);
+    go_to_z_from_surface(position, dabbing_height, surface_offset_from_zero_height);
     //gcode.dwell(5000000);
     if (!vector_is_zero(post_dab_scoot)) {
       go_to_xy_from_upper_left_corner(position + post_dab_scoot);
       gcode.dwell(500);
       go_to_xy_from_upper_left_corner(position);
     }
-    go_to_cruising_altitude(position);
+    go_to_cruising_altitude();
     retract();
   }
 };

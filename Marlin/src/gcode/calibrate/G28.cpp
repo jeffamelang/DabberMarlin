@@ -30,6 +30,7 @@
 #include "../../module/probe.h"
 
 #include "dab_side_base_right.h"
+#include "dab_side_base_back.h"
 #include "dab_side_base_bottom.h"
 #include "stain_utilities.h"
 #include <map>
@@ -729,8 +730,8 @@ void do_a_priming_dab(const Dabber & dabber, const Side side) {
       {BASE_RIGHT, {45, -45}},
       {BASE_BOTTOM, {45, -45}}
       };
-  const float PRIMING_DAB_AMOUNT = 0.30;
-  dabber.dab(SIDE_CENTER_OFFSETS.find(side)->second, PRIMING_DAB_AMOUNT, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000});
+  const float PRIMING_DAB_AMOUNT = 0.40;
+  dabber.dab(SIDE_CENTER_OFFSETS.find(side)->second, PRIMING_DAB_AMOUNT, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, 0.);
 }
 
 ProbeResult probe_for_edge_at_point(const xy_pos_t & location, const float cruising_altitude, const float edge_found_height) {
@@ -754,7 +755,7 @@ ProbeResult probe_for_edge_at_point(const xy_pos_t & location, const float cruis
 xy_pos_t find_edge_with_hint(const xy_pos_t & starting_location, const xy_pos_t & probing_direction, const float surface_height, const float extra_depth) {
   SERIAL_ECHOLNPGM("Finding edge with hint for start of ", starting_location.x, ",", starting_location.y);
   const float cruising_altitude = surface_height + 2.0;
-  const float edge_found_height = surface_height - 0.5 - extra_depth;
+  const float edge_found_height = surface_height - 0.4 - extra_depth;
 
   const float step_size = 0.1;
   float edge_offset = 0;
@@ -804,7 +805,7 @@ xy_pos_t find_edge_with_hint(const xy_pos_t & starting_location, const xy_pos_t 
 xy_pos_t find_edge_without_hint(const xy_pos_t & starting_location, const xy_pos_t & probing_direction, const float surface_height, const float extra_depth) {
   SERIAL_ECHOLNPGM("Finding edge WITHOUT hint for start of ", starting_location.x, ",", starting_location.y);
   const float cruising_altitude = surface_height + 2.0;
-  const float edge_found_height = surface_height - 0.2 - extra_depth;
+  const float edge_found_height = surface_height - 0.4 - extra_depth;
 
   // First, make sure that the starting location sees the surface.
   const ProbeResult starting_location_probe_result = probe_for_edge_at_point(starting_location, cruising_altitude, edge_found_height);
@@ -1245,14 +1246,21 @@ void GcodeSuite::M1399() {
         // There is no side here; move to the next one
         continue;
       }
-      continue;
       // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
+      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Constructing dabber with ", all_elevations_probing_points.size(), " elevations worth of probing points.");
+      for (auto iter = all_elevations_probing_points.begin(); iter != all_elevations_probing_points.end(); ++iter) {
+        SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Elevation ", iter->first, " has ", iter->second.size(), " points");
+      }
       const Dabber* dabber = new Dabber(upper_left_corner, surface_height, all_elevations_probing_points);
       if (!already_stained_first_side) {
         do_a_priming_dab(*dabber, quadrant_side);
         already_stained_first_side = true;
       }
       switch (quadrant_side) {
+        case BASE_BACK:
+          SERIAL_ECHOLNPGM("Starting to dab a base back");
+          dab_side_base_back(dabber);
+          break;
         case BASE_RIGHT:
           SERIAL_ECHOLNPGM("Starting to dab a base right");
           dab_side_base_right(dabber);
@@ -1270,7 +1278,7 @@ void GcodeSuite::M1399() {
   SERIAL_ECHOLNPGM("\n\n----------------------------------");
   SERIAL_ECHOLNPGM("Done with dabbing! Dropping the bed.");
   SERIAL_ECHOLNPGM("----------------------------------\n");
-  //go_to_z(400);
+  go_to_z(400);
 }
 
 void GcodeSuite::M1099() { 
@@ -1341,6 +1349,12 @@ void GcodeSuite::M1099() {
 void GcodeSuite::M1199() {
   //const float feedrate_extrude_mm_s = 70;
   const float feedrate_extrude_mm_s = 50;
+  int number_of_steps = 5;
+  for (int i = 1; i < number_of_steps; ++i) {
+    const float feedrate = i/float(number_of_steps) * feedrate_extrude_mm_s;
+    const float warm_up_purging_mm = 5 * i;
+    unscaled_e_move(warm_up_purging_mm, feedrate);
+  }
   const float purging_mm = 4000;
   unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
 }
