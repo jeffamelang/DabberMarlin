@@ -30,6 +30,7 @@
 #include "../../module/probe.h"
 
 #include "dab_side_base_right.h"
+#include "dab_side_base_left.h"
 #include "dab_side_base_back.h"
 #include "dab_side_base_bottom.h"
 #include "stain_utilities.h"
@@ -627,7 +628,18 @@ void GcodeSuite::G28() {
     8. Lid front
     9. Lid top
     */
-enum Side { UNKNOWN, BASE_LEFT, BASE_RIGHT, BASE_BACK, BASE_FRONT, BASE_BOTTOM, LID_LEFT, LID_RIGHT, LID_BACK, LID_FRONT, LID_TOP};
+enum Side { 
+  UNKNOWN, 
+BASE_LEFT,  // Next
+BASE_RIGHT, // Tuned
+BASE_BACK,  // Tuned
+BASE_FRONT, 
+BASE_BOTTOM,  // Tuned
+LID_LEFT, 
+LID_RIGHT, 
+LID_BACK, 
+LID_FRONT, 
+LID_TOP};
 
 Side identify_side_from_surface_height(const double surface_height) {
   const std::map<Side, float> expected_surface_heights =
@@ -640,7 +652,7 @@ Side identify_side_from_surface_height(const double surface_height) {
       {BASE_LEFT, 145.7},
       {BASE_BACK, 143.3},
       {BASE_FRONT, 151.0},
-      {BASE_RIGHT, 144.0},
+      {BASE_RIGHT, 144.4},
       {BASE_BOTTOM, 147.0}
      };
   const double tolerance = 0.4;
@@ -1260,6 +1272,10 @@ void GcodeSuite::M1399() {
         case BASE_BACK:
           SERIAL_ECHOLNPGM("Starting to dab a base back");
           dab_side_base_back(dabber);
+          break;
+        case BASE_LEFT:
+          SERIAL_ECHOLNPGM("Starting to dab a base left");
+          dab_side_base_left(dabber);
           break;
         case BASE_RIGHT:
           SERIAL_ECHOLNPGM("Starting to dab a base right");
