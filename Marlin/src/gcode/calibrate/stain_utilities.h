@@ -5,6 +5,7 @@
 #include "../../module/planner.h"
 #include "../../module/motion.h"
 #include <map>
+#include <vector>
 
 static constexpr float FEEDRATE_XY_MM_S = 150;
 static constexpr float FEEDRATE_Z_MM_S = 25;

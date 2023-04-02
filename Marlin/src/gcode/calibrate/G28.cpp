@@ -428,11 +428,23 @@ void GcodeSuite::G28() {
           }
       
           // Diagonal move first if both are homing
-          TERN_(QUICK_HOME, if (doX && doY) quick_home_xy());
+          //TERN_(QUICK_HOME, if (doX && doY) quick_home_xy());
       
           // Home Y (before X)
-          if (ENABLED(HOME_Y_BEFORE_X) && (doY || TERN0(CODEPENDENT_XY_HOMING, doX)))
-            homeaxis(Y_AXIS);
+          //if (ENABLED(HOME_Y_BEFORE_X) && (doY || TERN0(CODEPENDENT_XY_HOMING, doX)))
+            //homeaxis(Y_AXIS);
+
+
+          // TODO: drop the cleaning station
+
+          // Jeff, first move the nozzle up a little in case we're at the very bottom, where
+          // we can't get all the way to the bottom left corner.
+          // Pretend the current position is 0,0, jog a little up, pretend we're at the origin again because
+          // the did it in other places, so, uh, maybe?
+          current_position.set(0.0, 0.0);
+          sync_plan_position();
+          do_blocking_move_to_xy(0, 50, homing_feedrate(Y_AXIS));
+          endstops.validate_homing_move();
       
           // Home X
           if (doX || (doY && ENABLED(CODEPENDENT_XY_HOMING) && DISABLED(HOME_Y_BEFORE_X))) {
@@ -465,9 +477,18 @@ void GcodeSuite::G28() {
                   if (doI) homeaxis(I_AXIS);
           #endif
       
+          // Jeff, now we jog to the right a bit before homing Y because we can't reach the bottom left corner.
+          current_position.set(0.0, 0.0);
+          sync_plan_position();
+          do_blocking_move_to_xy(50, 0, homing_feedrate(X_AXIS));
+          endstops.validate_homing_move();
+
           // Home Y (after X)
-          if (DISABLED(HOME_Y_BEFORE_X) && doY)
+          //if (DISABLED(HOME_Y_BEFORE_X) && doY)
+          if (doY)
             homeaxis(Y_AXIS);
+
+          // TODO: park after this
       
           #if BOTH(FOAMCUTTER_XYUV, HAS_J_AXIS)
                   // Home J (after Y)
@@ -742,7 +763,7 @@ void do_a_priming_dab(const Dabber & dabber, const Side side) {
       {BASE_RIGHT, {45, -45}},
       {BASE_BOTTOM, {45, -45}}
       };
-  const float PRIMING_DAB_AMOUNT = 0.40;
+  const float PRIMING_DAB_AMOUNT = 1.00;
   dabber.dab(SIDE_CENTER_OFFSETS.find(side)->second, PRIMING_DAB_AMOUNT, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, 0.);
 }
 
@@ -1008,7 +1029,7 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
       const xy_pos_t probing_location = upper_left_corner + unoffsetted_probing_location;
       const float surface_height = find_surface_height(probing_location);
       SERIAL_ECHOLNPGM("For probing location (", probing_location.x, ",", probing_location.y, ") found height of ", surface_height);
-      probed_points.push_back(std::pair(unoffsetted_probing_location, surface_height));
+      probed_points.push_back(std::pair<xy_pos_t, float>(unoffsetted_probing_location, surface_height));
       go_to_z(cruising_altitude);
     }
     all_elevations_probed_points[elevation] = probed_points;
@@ -1017,7 +1038,7 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
 }
 
 xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height, const xy_pos_t upper_left_corner_hint) {
-  const xy_pos_t PROBE_OFFSET = {0.5, -0.5};
+  const xy_pos_t PROBE_OFFSET = {0.5, -0.4};
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
     { 
       {LID_FRONT, {0, 4.5}},
@@ -1148,7 +1169,7 @@ void GcodeSuite::M1399() {
   const double cruising_altitude = 160;
 
   const int number_of_quadrants = 1;
-  const int number_of_subquadrants = 1;
+  const int number_of_subquadrants = 4;
 
   std::vector<Side> quadrant_sides(number_of_quadrants, Side::UNKNOWN);
   std::vector<std::vector<float>> surface_heights(number_of_quadrants, std::vector<float>(number_of_subquadrants, NAN));
