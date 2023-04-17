@@ -879,8 +879,8 @@
 
 //#define SENSORLESS_BACKOFF_MM  { 2, 2, 0 }  // (linear=mm, rotational=°) Backoff from endstops before sensorless homing
 
-#define HOMING_BUMP_MM      { 5, 5, 2 }       // (linear=mm, rotational=°) Backoff from endstops after first bump
-#define HOMING_BUMP_DIVISOR { 2, 2, 4 }       // Re-Bump Speed Divisor (Divides the Homing Feedrate)
+#define HOMING_BUMP_MM      { 5, 5, 2, 2 }       // (linear=mm, rotational=°) Backoff from endstops after first bump
+#define HOMING_BUMP_DIVISOR { 2, 2, 4, 4 }       // Re-Bump Speed Divisor (Divides the Homing Feedrate)
 
 //#define HOMING_BACKOFF_POST_MM { 2, 2, 2 }  // (linear=mm, rotational=°) Backoff from endstops after homing
 //#define XY_COUNTERPART_BACKOFF_MM 0         // (mm) Backoff X after homing Y, and vice-versa
@@ -1097,7 +1097,7 @@
   //#define SHAPING_MENU                // Add a menu to the LCD to set shaping parameters.
 #endif
 
-#define AXIS_RELATIVE_MODES { false, false, false, false }
+#define AXIS_RELATIVE_MODES { false, false, false, false, false }
 
 // Add a Duplicate option for well-separated conjoined nozzles
 //#define MULTI_NOZZLE_DUPLICATION
@@ -1349,7 +1349,7 @@
 #if HAS_MANUAL_MOVE_MENU
   //#define MANUAL_FEEDRATE { 50*60, 50*60, 4*60, 2*60 } // (mm/min) Feedrates for manual moves along X, Y, Z, E from panel
   //#define MANUAL_FEEDRATE { 75*60, 75*60, 8*60, 10*60 } // (mm/min) Feedrates for manual moves along X, Y, Z, E from panel
-  #define MANUAL_FEEDRATE { 75*60, 75*60, 8*60, 30*60 } // (mm/min) Feedrates for manual moves along X, Y, Z, E from panel
+  #define MANUAL_FEEDRATE { 75*60, 75*60, 8*60, 30*60, 8*60 } // (mm/min) Feedrates for manual moves along X, Y, Z, E from panel
   #define FINE_MANUAL_MOVE 0.025    // (mm) Smallest manual move (< 0.1mm) applying to Z on most machines
   #if IS_ULTIPANEL
     #define MANUAL_E_MOVES_RELATIVE // Display extruder move distance rather than "position"
@@ -2803,7 +2803,7 @@
   #endif
 
   #if AXIS_IS_TMC_CONFIG(I)
-    #define I_CURRENT      800
+    #define I_CURRENT      900
     #define I_CURRENT_HOME I_CURRENT
     #define I_MICROSTEPS    16
     #define I_RSENSE         0.11
@@ -2833,9 +2833,9 @@
   #endif
 
   #if AXIS_IS_TMC_CONFIG(U)
-    #define U_CURRENT      800
+    #define U_CURRENT      900
     #define U_CURRENT_HOME U_CURRENT
-    #define U_MICROSTEPS     8
+    #define U_MICROSTEPS     16
     #define U_RSENSE         0.11
     #define U_CHAIN_POS     -1
     //#define U_INTERPOLATE  true
@@ -4224,7 +4224,7 @@
 //
 // M43 - display pin status, toggle pins, watch pins, watch endstops & toggle LED, test servo probe
 //
-//#define PINS_DEBUGGING
+#define PINS_DEBUGGING
 
 // Enable Tests that will run at startup and produce a report
 //#define MARLIN_TEST_BUILD

@@ -365,6 +365,12 @@ void GcodeSuite::G28() {
   remember_feedrate_scaling_off();
 
   endstops.enable(true); // Enable endstops for next homing move
+  
+  // always home the cleaning station first, or else the nozzle could be submerged
+  // in the cleaning station and when we move the nozzle we could ram the side of the
+  // cleaning station
+  SERIAL_ECHOLNPGM("Homing the cleaning station to get it out of the way.");
+  homeaxis(I_AXIS);
 
   #if ENABLED(DELTA)
       
@@ -435,16 +441,6 @@ void GcodeSuite::G28() {
             //homeaxis(Y_AXIS);
 
 
-          // TODO: drop the cleaning station
-
-          // Jeff, first move the nozzle up a little in case we're at the very bottom, where
-          // we can't get all the way to the bottom left corner.
-          // Pretend the current position is 0,0, jog a little up, pretend we're at the origin again because
-          // the did it in other places, so, uh, maybe?
-          current_position.set(0.0, 0.0);
-          sync_plan_position();
-          do_blocking_move_to_xy(0, 50, homing_feedrate(Y_AXIS));
-          endstops.validate_homing_move();
       
           // Home X
           if (doX || (doY && ENABLED(CODEPENDENT_XY_HOMING) && DISABLED(HOME_Y_BEFORE_X))) {
@@ -467,6 +463,11 @@ void GcodeSuite::G28() {
             
             #else
             
+                    // Jeff, first move the nozzle up a little in case we're at the very bottom, where
+                    // we can't get all the way to the bottom left corner.
+                    float jogged_y_position = std::min(float(Y_BED_SIZE - 5), current_position.y+50.0f);
+                    do_blocking_move_to_xy(current_position.x, jogged_y_position, homing_feedrate(Y_AXIS));
+
                     homeaxis(X_AXIS);
             
             #endif
@@ -477,18 +478,17 @@ void GcodeSuite::G28() {
                   if (doI) homeaxis(I_AXIS);
           #endif
       
-          // Jeff, now we jog to the right a bit before homing Y because we can't reach the bottom left corner.
-          current_position.set(0.0, 0.0);
-          sync_plan_position();
-          do_blocking_move_to_xy(50, 0, homing_feedrate(X_AXIS));
-          endstops.validate_homing_move();
 
           // Home Y (after X)
           //if (DISABLED(HOME_Y_BEFORE_X) && doY)
-          if (doY)
+          if (doY) {
+            // Jeff, now we jog to the right a bit before homing Y because we can't reach the bottom left corner.
+            float jogged_x_position = std::min(float(X_BED_SIZE - 5), current_position.x+50.0f);
+            do_blocking_move_to_xy(jogged_x_position, current_position.y, homing_feedrate(X_AXIS));
             homeaxis(Y_AXIS);
+          }
 
-          // TODO: park after this
+          // TODO: jeff park after this
       
           #if BOTH(FOAMCUTTER_XYUV, HAS_J_AXIS)
                   // Home J (after Y)
@@ -518,6 +518,8 @@ void GcodeSuite::G28() {
                           }
                   #endif
             
+                  /*
+                  // jeff, do this earlier
                   SECONDARY_AXIS_CODE(
                     if (doI) homeaxis(I_AXIS),
                     if (doJ) homeaxis(J_AXIS),
@@ -526,6 +528,7 @@ void GcodeSuite::G28() {
                     if (doV) homeaxis(V_AXIS),
                     if (doW) homeaxis(W_AXIS)
                   );
+                  */
           #endif
       
           sync_plan_position();

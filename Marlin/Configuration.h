@@ -67,7 +67,7 @@
 // Author info of this build printed to the host during boot and M115
 #define STRING_CONFIG_H_AUTHOR "(jeff, DABBER)" // Who made the changes.
 // Name displayed in the LCD "Ready" message and Info menu
-#define CUSTOM_MACHINE_NAME "DABBER.0.2"
+#define CUSTOM_MACHINE_NAME "DABBER.0.5"
 //#define CUSTOM_VERSION_FILE Version.h // Path from the root directory (no quotes)
 #define SHORT_BUILD_VERSION "aubrie's the best"
 // Feedrate (mm/min) for the first approach when double-probing (MULTIPLE_PROBING == 2)
@@ -76,7 +76,7 @@
 #define Z_PROBE_FEEDRATE_SLOW (Z_PROBE_FEEDRATE_FAST / 2)
 //#define Z_PROBE_FEEDRATE_SLOW (Z_PROBE_FEEDRATE_FAST / 3)
 // Homing speeds (linear=mm/min, rotational=°/min)
-#define HOMING_FEEDRATE_MM_M { (2*50*60), (2*50*60), (6*4*60) }
+#define HOMING_FEEDRATE_MM_M { (2*50*60), (2*50*60), (6*4*60), (6*4*60) }
 #define NO_AUTO_ASSIGN_WARNING
 #define DIAG_JUMPERS_REMOVED
 
@@ -183,10 +183,10 @@
 #define Z2_DRIVER_TYPE TMC2209
 //#define Z3_DRIVER_TYPE A4988
 //#define Z4_DRIVER_TYPE A4988
-//#define I_DRIVER_TYPE  A4988
+#define I_DRIVER_TYPE  TMC2209
 //#define J_DRIVER_TYPE  A4988
 //#define K_DRIVER_TYPE  A4988
-//#define U_DRIVER_TYPE  A4988
+//#define U_DRIVER_TYPE  TMC2209
 //#define V_DRIVER_TYPE  A4988
 //#define W_DRIVER_TYPE  A4988
 #define E0_DRIVER_TYPE TMC2209  // TMC2225
@@ -217,7 +217,7 @@
  */
 #ifdef I_DRIVER_TYPE
   #define AXIS4_NAME 'A' // :['A', 'B', 'C', 'U', 'V', 'W']
-  #define AXIS4_ROTATES
+  //#define AXIS4_ROTATES
 #endif
 #ifdef J_DRIVER_TYPE
   #define AXIS5_NAME 'B' // :['B', 'C', 'U', 'V', 'W']
@@ -1052,7 +1052,7 @@
 #define USE_XMIN_PLUG
 #define USE_YMIN_PLUG
 //#define USE_ZMIN_PLUG
-//#define USE_IMIN_PLUG
+#define USE_IMIN_PLUG
 //#define USE_JMIN_PLUG
 //#define USE_KMIN_PLUG
 //#define USE_UMIN_PLUG
@@ -1127,7 +1127,7 @@
 #else
   //#define Z_MIN_ENDSTOP_INVERTING true  // Set to true to invert the logic of the endstop.
 #endif
-#define I_MIN_ENDSTOP_INVERTING false // Set to true to invert the logic of the endstop.
+#define I_MIN_ENDSTOP_INVERTING true // Set to true to invert the logic of the endstop.
 #define J_MIN_ENDSTOP_INVERTING false // Set to true to invert the logic of the endstop.
 #define K_MIN_ENDSTOP_INVERTING false // Set to true to invert the logic of the endstop.
 #define U_MIN_ENDSTOP_INVERTING false // Set to true to invert the logic of the endstop.
@@ -1191,7 +1191,7 @@
  * Override with M92
  *                                      X, Y, Z [, I [, J [, K...]]], E0 [, E1[, E2...]]
  */
-#define DEFAULT_AXIS_STEPS_PER_UNIT   { 80, 80, 400, 96 }
+#define DEFAULT_AXIS_STEPS_PER_UNIT   { 80, 80, 400, 1600, 96 }
 
 /**
  * Default Max Feed Rate (linear=mm/s, rotational=°/s)
@@ -1199,7 +1199,7 @@
  *                                      X, Y, Z [, I [, J [, K...]]], E0 [, E1[, E2...]]
  */
 //#define DEFAULT_MAX_FEEDRATE          { 500, 500, 5, 25 }
-#define DEFAULT_MAX_FEEDRATE          { 500, 500, 15, 100 }
+#define DEFAULT_MAX_FEEDRATE          { 500, 500, 15, 15, 100 }
 
 //#define LIMITED_MAX_FR_EDITING        // Limit edit via M203 or LCD to DEFAULT_MAX_FEEDRATE * 2
 #if ENABLED(LIMITED_MAX_FR_EDITING)
@@ -1212,7 +1212,7 @@
  * Override with M201
  *                                      X, Y, Z [, I [, J [, K...]]], E0 [, E1[, E2...]]
  */
-#define DEFAULT_MAX_ACCELERATION      { 1000, 1000, 200, 5000 }
+#define DEFAULT_MAX_ACCELERATION      { 1000, 1000, 200, 200, 5000 }
 
 //#define LIMITED_MAX_ACCEL_EDITING     // Limit edit via M201 or LCD to DEFAULT_MAX_ACCELERATION * 2
 #if ENABLED(LIMITED_MAX_ACCEL_EDITING)
@@ -1510,7 +1510,7 @@
  *     O-- FRONT --+
  */
 //#define NOZZLE_TO_PROBE_OFFSET { 24, -47, -1.5 }
-#define NOZZLE_TO_PROBE_OFFSET { 0., 0., 0.}
+#define NOZZLE_TO_PROBE_OFFSET { 0., 0., 0., 0.}
 #define DIAG_PINS_REMOVED
 
 // Most probes should stay away from the edges of the bed, but
@@ -1634,7 +1634,7 @@
 #define Y_ENABLE_ON 0
 #define Z_ENABLE_ON 0
 #define E_ENABLE_ON 0 // For all extruders
-//#define I_ENABLE_ON 0
+#define I_ENABLE_ON 0
 //#define J_ENABLE_ON 0
 //#define K_ENABLE_ON 0
 //#define U_ENABLE_ON 0
@@ -1646,7 +1646,7 @@
 #define DISABLE_X false
 #define DISABLE_Y false
 #define DISABLE_Z false
-//#define DISABLE_I false
+#define DISABLE_I false
 //#define DISABLE_J false
 //#define DISABLE_K false
 //#define DISABLE_U false
@@ -1667,7 +1667,7 @@
 #define INVERT_X_DIR true
 #define INVERT_Y_DIR true
 #define INVERT_Z_DIR true
-//#define INVERT_I_DIR false
+#define INVERT_I_DIR true
 //#define INVERT_J_DIR false
 //#define INVERT_K_DIR false
 //#define INVERT_U_DIR false
@@ -1708,7 +1708,7 @@
 #define X_HOME_DIR -1
 #define Y_HOME_DIR -1
 #define Z_HOME_DIR 1
-//#define I_HOME_DIR -1
+#define I_HOME_DIR -1
 //#define J_HOME_DIR -1
 //#define K_HOME_DIR -1
 //#define U_HOME_DIR -1
@@ -1719,7 +1719,7 @@
 
 // The size of the printable area
 #define X_BED_SIZE 400
-#define Y_BED_SIZE 400
+#define Y_BED_SIZE 425
 
 // Travel limits (linear=mm, rotational=°) after homing, corresponding to endstop positions.
 #define X_MIN_POS 0
@@ -1728,8 +1728,8 @@
 #define X_MAX_POS X_BED_SIZE
 #define Y_MAX_POS Y_BED_SIZE
 #define Z_MAX_POS 400
-//#define I_MIN_POS 0
-//#define I_MAX_POS 50
+#define I_MIN_POS 0
+#define I_MAX_POS 100
 //#define J_MIN_POS 0
 //#define J_MAX_POS 50
 //#define K_MIN_POS 0

@@ -126,6 +126,8 @@
   #define FIL_RUNOUT3_PIN                   PG5
 #endif
 
+#define I_MIN_PIN                         PE10  // E1
+
 //
 // Steppers
 //
