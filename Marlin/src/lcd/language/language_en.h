@@ -488,6 +488,7 @@ namespace Language_en {
   LSTR MSG_STOP_PRINT                     = _UxGT("Stop Print");
   LSTR MSG_OUTAGE_RECOVERY                = _UxGT("Power Outage");
   LSTR MSG_STAIN_DRAGON_WOLF                   = _UxGT("Stain Dragon/Wolf");
+  LSTR MSG_PARK_BATH                   = _UxGT("Park in Bath");
   LSTR MSG_PURGE_STAIN                   = _UxGT("Purge Whole Tube");
   LSTR MSG_EXTRUDE_MEDIUM_STAIN                   = _UxGT("Pump a Medium");
   LSTR MSG_PRIME_STAIN                   = _UxGT("Pump a Small");

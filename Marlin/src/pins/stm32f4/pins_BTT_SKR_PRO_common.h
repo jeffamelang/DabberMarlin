@@ -103,7 +103,8 @@
   #endif
 #else
   #define Z_MIN_PIN                         PG8   // Z-
-  #define Z_MAX_PIN                         PG5   // E2
+  //#define Z_MAX_PIN                         PG5   // E2
+  #define Z_MAX_PIN                         PE10  // E1
 #endif
 
 //
@@ -126,7 +127,8 @@
   #define FIL_RUNOUT3_PIN                   PG5
 #endif
 
-#define I_MIN_PIN                         PE10  // E1
+//#define I_MIN_PIN                         PE10  // E1
+#define I_MIN_PIN                         PE15  // E1
 
 //
 // Steppers

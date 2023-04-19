@@ -526,9 +526,12 @@ private:
     static void G27();
   #endif
 
+public:
   static void G28();
+private:
   static void M1099();
   static void M1199();
+  static void M1209();
   static void M1249();
   static void M1299();
   static void M1399();

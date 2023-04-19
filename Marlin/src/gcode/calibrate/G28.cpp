@@ -194,6 +194,110 @@
       
 #endif // IMPROVE_HOMING_RELIABILITY
 
+static const xy_pos_t BATH_PARKING_POSITION = {30., 2.};
+static const xy_pos_t NOZZLE_SIDE_WIPE_POSITION = {67.2, 7.};
+static const xy_pos_t NOZZLE_PURGE_POSITION = {99., 1.};
+static const xy_pos_t TIP_WIPE_TOP_LEFT = {133., 10.};
+static const float SAFE_BATH_MOVEMENT_HEIGHT = 28;
+static const float BATH_PARKING_HEIGHT = 49;
+static const float CLEANING_STATION_VERTICAL_MOVEMENT_RATE = 3;
+static const float NOZZLE_SIDE_WIPE_OFFSET = 4.5;
+static const float NOZZLE_SIDE_WIPE_HEIGHT = 40;
+static const float NOZZLE_TIP_WIPE_HEIGHT = 37;
+const std::vector<xy_pos_t> SIDE_WIPE_VECTORS =
+    {{NOZZLE_SIDE_WIPE_OFFSET, 0.0},
+     {0.0, -1.0 * NOZZLE_SIDE_WIPE_OFFSET},
+     {-1.0 * NOZZLE_SIDE_WIPE_OFFSET, 0.0},
+     {0.0, NOZZLE_SIDE_WIPE_OFFSET}};
+
+void move_cleaning_station_to_height(float height) {
+  do_blocking_move_to_i(height, CLEANING_STATION_VERTICAL_MOVEMENT_RATE);
+}
+
+void move_cleaning_station_to_safe_movement_height() {
+  SERIAL_ECHOLNPGM("Moving cleaning station to safe movement height");
+  static bool has_homed = false;
+  if (has_homed) {
+    has_homed = true;
+    SERIAL_ECHOLNPGM("Homing all axes because they haven't yet been homed.");
+    gcode.G28();
+  } else {
+    SERIAL_ECHOLNPGM("NOT Homing all axes because they have already been homed.");
+  }
+  move_cleaning_station_to_height(SAFE_BATH_MOVEMENT_HEIGHT);
+}
+
+void purge_nozzle() {
+  SERIAL_ECHOLNPGM("Purging nozzle");
+  move_cleaning_station_to_safe_movement_height();
+  // Move the nozzle to the purging position
+  go_to_xy(NOZZLE_PURGE_POSITION);
+
+  //const float feedrate_extrude_mm_s = 50;
+  //const float purging_mm = 200;
+  //unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
+}
+
+void park_nozzle_in_bath() {
+  SERIAL_ECHOLNPGM("in park_nozzle_in_bath.");
+  move_cleaning_station_to_safe_movement_height();
+  // Move the nozzle to the parking position
+  SERIAL_ECHOLNPGM("Moving to parking position.");
+  go_to_xy(BATH_PARKING_POSITION);
+  // Move the cleaning station up
+  SERIAL_ECHOLNPGM("Raising cleaning station.");
+  move_cleaning_station_to_height(BATH_PARKING_HEIGHT);
+}
+
+void dry_nozzle_tip() {
+  SERIAL_ECHOLNPGM("Drying the nozzle tip");
+  //static const xy_pos_t TIP_WIPE_BOTTOM_RIGHT = {180., 0.};
+  move_cleaning_station_to_safe_movement_height();
+  // 133, 139.7, 146.4, 153.1, 159.8, 166.5, 173.2, 180
+  // 10, 5, 0
+  static int currentIndex = -1;
+  if (currentIndex == -1) {
+    currentIndex = rand() % (3*8);
+  }
+  int row = currentIndex / 8;
+  int col = currentIndex % 8;
+  go_to_xy({TIP_WIPE_TOP_LEFT.x+47.f/7.f*col, row * 5.f});
+  move_cleaning_station_to_height(NOZZLE_TIP_WIPE_HEIGHT);
+  move_cleaning_station_to_safe_movement_height();
+  currentIndex++;
+}
+
+void wipe_nozzle_sides() {
+  SERIAL_ECHOLNPGM("Wiping the nozzle sides");
+  move_cleaning_station_to_safe_movement_height();
+  // Wipe all four sides of the nozzle
+  for (int i = 0; i < 4; ++i ) {
+    // Move nozzle to the side wiping slot
+    go_to_xy(NOZZLE_SIDE_WIPE_POSITION);
+    // Descend to the wiping height
+    move_cleaning_station_to_height(NOZZLE_SIDE_WIPE_HEIGHT);
+    // Move against the sponge
+    const xy_pos_t vec = SIDE_WIPE_VECTORS[i];
+    go_to_xy({NOZZLE_SIDE_WIPE_POSITION.x + vec.x, NOZZLE_SIDE_WIPE_POSITION.y + vec.y});
+    // Ascend back to the movement height
+    move_cleaning_station_to_safe_movement_height();
+  }
+}
+
+void prepare_nozzle_for_sensing() {
+  SERIAL_ECHOLNPGM("Preparing nozzle for sensing");
+  move_cleaning_station_to_safe_movement_height();
+  wipe_nozzle_sides();
+  dry_nozzle_tip();
+}
+
+void after_sensing_prepare_to_dab() {
+  SERIAL_ECHOLNPGM("After sensing, preparing to dab.");
+  move_cleaning_station_to_safe_movement_height();
+  purge_nozzle();
+  dry_nozzle_tip();
+}
+
 /**
  * G28: Home all axes according to settings
  *
@@ -213,6 +317,7 @@
  *  Z   Home to the Z endstop
  */
 void GcodeSuite::G28() {
+  SERIAL_ECHOLNPGM("Homing");
   DEBUG_SECTION(log_G28, "G28", DEBUGGING(LEVELING));
   if (DEBUGGING(LEVELING)) log_machine_info();
 
@@ -371,6 +476,14 @@ void GcodeSuite::G28() {
   // cleaning station
   SERIAL_ECHOLNPGM("Homing the cleaning station to get it out of the way.");
   homeaxis(I_AXIS);
+  SERIAL_ECHOLNPGM("DONE Homing the cleaning station to get it out of the way.");
+
+  static bool has_homed_all_axes = false;
+  if (!has_homed_all_axes) {
+    SERIAL_ECHOLNPGM("HAVEN'T yet homed all axes yet, homing all axes.");
+  } else {
+    SERIAL_ECHOLNPGM("Have ALREADY homed all axes yet, homing all axes.");
+  }
 
   #if ENABLED(DELTA)
       
@@ -421,7 +534,7 @@ void GcodeSuite::G28() {
                   constexpr bool doZ = false;
           #endif
       
-          TERN_(HOME_Z_FIRST, if (doZ) homeaxis(Z_AXIS));
+          TERN_(HOME_Z_FIRST, if (!has_homed_all_axes || doZ) homeaxis(Z_AXIS));
       
           const bool seenR = parser.seenval('R');
           const float z_homing_height = seenR ? parser.value_linear_units() : Z_HOMING_HEIGHT;
@@ -443,7 +556,7 @@ void GcodeSuite::G28() {
 
       
           // Home X
-          if (doX || (doY && ENABLED(CODEPENDENT_XY_HOMING) && DISABLED(HOME_Y_BEFORE_X))) {
+          if (!has_homed_all_axes || doX || (doY && ENABLED(CODEPENDENT_XY_HOMING) && DISABLED(HOME_Y_BEFORE_X))) {
       
             #if ENABLED(DUAL_X_CARRIAGE)
             
@@ -466,8 +579,9 @@ void GcodeSuite::G28() {
                     // Jeff, first move the nozzle up a little in case we're at the very bottom, where
                     // we can't get all the way to the bottom left corner.
                     float jogged_y_position = std::min(float(Y_BED_SIZE - 5), current_position.y+50.0f);
-                    do_blocking_move_to_xy(current_position.x, jogged_y_position, homing_feedrate(Y_AXIS));
+                    go_to_xy({current_position.x, jogged_y_position});
 
+                    SERIAL_ECHOLNPGM("Homing x axis");
                     homeaxis(X_AXIS);
             
             #endif
@@ -481,14 +595,19 @@ void GcodeSuite::G28() {
 
           // Home Y (after X)
           //if (DISABLED(HOME_Y_BEFORE_X) && doY)
-          if (doY) {
+          if (!has_homed_all_axes || doY) {
             // Jeff, now we jog to the right a bit before homing Y because we can't reach the bottom left corner.
             float jogged_x_position = std::min(float(X_BED_SIZE - 5), current_position.x+50.0f);
-            do_blocking_move_to_xy(jogged_x_position, current_position.y, homing_feedrate(X_AXIS));
+            go_to_xy({jogged_x_position, current_position.y});
+            SERIAL_ECHOLNPGM("Homing y axis");
             homeaxis(Y_AXIS);
           }
 
-          // TODO: jeff park after this
+          // jeff
+          SERIAL_ECHOLNPGM("While homing, moving to parking position.");
+          go_to_xy(BATH_PARKING_POSITION);
+          SERIAL_ECHOLNPGM("While homing, raising cleaning station.");
+          move_cleaning_station_to_height(BATH_PARKING_HEIGHT);
       
           #if BOTH(FOAMCUTTER_XYUV, HAS_J_AXIS)
                   // Home J (after Y)
@@ -638,6 +757,8 @@ void GcodeSuite::G28() {
 
   TERN_(FULL_REPORT_TO_HOST_FEATURE, set_and_report_grblstate(old_grblstate));
 
+  has_homed_all_axes = true;
+  SERIAL_ECHOLNPGM("Done homing");
 }
 
     /* Side indexes:
@@ -1411,4 +1532,9 @@ void GcodeSuite::M1299() {
   const float feedrate_extrude_mm_s = 50;
   const float purging_mm = 10;
   unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
+}
+
+// Park nozzle
+void GcodeSuite::M1209() {
+  park_nozzle_in_bath();
 }
