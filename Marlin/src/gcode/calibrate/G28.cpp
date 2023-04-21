@@ -786,16 +786,16 @@ void GcodeSuite::G28() {
     */
 enum Side { 
   UNKNOWN, 
-LID_FRONT, 
-BASE_FRONT, 
-LID_BACK, 
-LID_RIGHT, 
-LID_LEFT, 
-BASE_BOTTOM,  // Tuned
-BASE_LEFT,  // Next
-BASE_RIGHT, // Tuned
-BASE_BACK,  // Tuned
-LID_TOP
+  BASE_LEFT,  // Next
+  BASE_RIGHT, // Tuned
+  BASE_BACK,  // Tuned
+  BASE_FRONT, 
+  BASE_BOTTOM,  // Tuned
+  LID_LEFT, 
+  LID_RIGHT, 
+  LID_BACK, 
+  LID_FRONT, 
+  LID_TOP
 };
 
 float find_surface_height(const xy_pos_t & position, const float stop_height) {
@@ -808,20 +808,13 @@ float find_surface_height(const xy_pos_t & position) {
   return find_surface_height(position, height_at_which_slot_is_empty);
 }
 
-bool side_is_sensed(const xy_pos_t probing_location, const xy_pos_t offset, std::map<Side, float> expected_surface_heights, const Side ifThere) {
+bool side_is_sensed(const xy_pos_t probing_location, const xy_pos_t offset, const float surface_height) {
   const float depth_tolerance = 1.5;
-  return !isnan(find_surface_height(probing_location + offset, expected_surface_heights[ifThere] - depth_tolerance));
-}
-
-Side get_side_if_sensed(const xy_pos_t probing_location, const xy_pos_t offset, const std::map<Side, float> expected_surface_heights, const Side ifThere, const Side ifNot) {
-  if (side_is_sensed(probing_location, offset, expected_surface_heights, ifThere)) {
-    return ifThere;
-  } else {
-    return ifNot;
-  }
+  return !isnan(find_surface_height(probing_location + offset, surface_height - depth_tolerance));
 }
 
 Side identify_side(const double surface_height, const xy_pos_t probing_location) {
+  // These aren't really necessary any more, but I leave them for reference.
   const std::map<Side, float> expected_surface_heights =
     { 
       {LID_FRONT, 151.9},
@@ -835,102 +828,56 @@ Side identify_side(const double surface_height, const xy_pos_t probing_location)
       {BASE_BACK, 143.3},
       {LID_TOP, 119.5}
      };
-  const double tolerance = 1.0;
-  std::vector<Side> nearby_sides;
-  for (auto e : expected_surface_heights) {
-    if ((fabs(surface_height - e.second)) < tolerance) {
-      nearby_sides.push_back(e.first);
-    }
+  if (surface_height < 130) {
+    return LID_TOP;
   }
-  if (nearby_sides.size() == 0) {
-    return UNKNOWN;
-  }
-  if (nearby_sides.size() == 1) {
-    return nearby_sides[0];
-  }
-  std::sort(nearby_sides.begin(), nearby_sides.end());
-  const xy_pos_t base_front_bottom_offset = {0., -44.5};
-  const xy_pos_t lid_right_vs_back_offset = {8.5, 4.5};
-  const xy_pos_t lid_left_offset = {-5.5, -4.5};
-  const xy_pos_t base_bottom_offset = {0., -55.5};
-  const xy_pos_t base_back_offset = {0., -55.5};
-  const xy_pos_t base_left_offset = {24.5, -47.5};
-  if (nearby_sides == (std::vector<Side>){LID_FRONT, BASE_FRONT} ||
-      nearby_sides == (std::vector<Side>){LID_FRONT, BASE_FRONT, LID_BACK}) {
-    if (side_is_sensed(probing_location, base_front_bottom_offset, expected_surface_heights, BASE_FRONT)) {
-      return BASE_FRONT;
-    } else {
-      if (nearby_sides.size() == 2) {
-        return LID_FRONT;
-      } else {
-        const xy_pos_t offset2 = {0., 15.5};
-        return get_side_if_sensed(probing_location, offset2, expected_surface_heights, LID_BACK, LID_FRONT);
+  const std::vector<xy_pos_t> surface_signature_probing_positions = 
+  {
+    {30.0, 12.0},
+    {30.0, -8.0},
+    {-25.0, -41.0},
+    {34.0, -62.0},
+    {34.0, -73.75},
+    {27.0, -37.25}
+  };
+  const std::map<Side, std::vector<bool> > expected_surface_signatures = 
+  {
+    {BASE_LEFT, {false, false, true, true, true, false}},
+    {BASE_RIGHT, {true, true, true, true, false, false}},
+    {BASE_BACK, {true, true, true, true, true, false}},
+    {BASE_FRONT, {false, false, false, false, true, false}},
+    {BASE_BOTTOM, {true, true, true, true, true, true}},
+    {LID_LEFT, {true, true, true, false, false, false}},
+    {LID_RIGHT, {true, true, false, false, false, false}},
+    {LID_BACK, {true, false, false, false, false, false}},
+    {LID_FRONT, {false, false, false, false, false, false}},
+  };
+  std::vector<bool> surface_signature;
+  for (xy_pos_t signature_probing_position : surface_signature_probing_positions) {
+    surface_signature.push_back(side_is_sensed(probing_location, signature_probing_position, surface_height));
+    std::vector<Side> matching_sides;
+    for (auto entry : expected_surface_signatures) {
+      bool matches = true;
+      for (unsigned int i = 0; i < surface_signature.size(); ++i) {
+        if (surface_signature[i] != entry.second[i]) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        matching_sides.push_back(entry.first);
       }
     }
-  }
-  if (nearby_sides == (std::vector<Side>){BASE_FRONT, LID_BACK} ||
-      nearby_sides == (std::vector<Side>){BASE_FRONT, LID_BACK, LID_RIGHT}) {
-    if (side_is_sensed(probing_location, base_front_bottom_offset, expected_surface_heights, BASE_FRONT)) {
-      return BASE_FRONT;
-    } else {
-      if (nearby_sides.size() == 2) {
-        return LID_BACK;
-      } else {
-        return get_side_if_sensed(probing_location, lid_right_vs_back_offset, expected_surface_heights, LID_RIGHT, LID_BACK);
-      }
+    if (matching_sides.size() == 1) {
+      return matching_sides[0];
     }
   }
-  if (nearby_sides == (std::vector<Side>){LID_BACK, LID_RIGHT} ||
-      nearby_sides == (std::vector<Side>){LID_BACK, LID_RIGHT, LID_LEFT}) {
-    if (side_is_sensed(probing_location, lid_left_offset, expected_surface_heights, LID_LEFT)) {
-      return LID_LEFT;
-    } else {
-      return get_side_if_sensed(probing_location, lid_right_vs_back_offset, expected_surface_heights, LID_RIGHT, LID_BACK);
-    }
+  SERIAL_ECHOPGM("ERROR: could not identify side with signature of");
+  for (bool b : surface_signature) {
+    SERIAL_ECHOPGM(" ");
+    SERIAL_ECHOPGM(b ? "true" : "false");
   }
-  if (nearby_sides == (std::vector<Side>){LID_RIGHT, LID_LEFT} ||
-      nearby_sides == (std::vector<Side>){LID_RIGHT, LID_LEFT, BASE_BOTTOM}) {
-    if (side_is_sensed(probing_location, base_bottom_offset, expected_surface_heights, BASE_BOTTOM)) {
-      return BASE_BOTTOM;
-    } else {
-      return get_side_if_sensed(probing_location, lid_left_offset, expected_surface_heights, LID_LEFT, LID_RIGHT);
-    }
-  }
-  if (nearby_sides == (std::vector<Side>){LID_LEFT, BASE_BOTTOM} ||
-      nearby_sides == (std::vector<Side>){LID_LEFT, BASE_BOTTOM, BASE_LEFT}) {
-    if (side_is_sensed(probing_location, base_bottom_offset, expected_surface_heights, BASE_BOTTOM)) {
-      return BASE_BOTTOM;
-    } else {
-      if (nearby_sides.size() == 2) {
-        return LID_LEFT;
-      } else {
-        return get_side_if_sensed(probing_location, base_left_offset, expected_surface_heights, BASE_LEFT, LID_LEFT);
-      }
-    }
-  }
-  if (nearby_sides == (std::vector<Side>){BASE_BOTTOM, BASE_LEFT} ||
-      nearby_sides == (std::vector<Side>){BASE_BOTTOM, BASE_LEFT, BASE_RIGHT}) {
-    if (side_is_sensed(probing_location, base_bottom_offset, expected_surface_heights, BASE_BOTTOM)) {
-      return BASE_BOTTOM;
-    } else {
-      if (nearby_sides.size() == 2) {
-        return BASE_LEFT;
-      } else {
-        return get_side_if_sensed(probing_location, base_left_offset, expected_surface_heights, BASE_LEFT, BASE_RIGHT);
-      }
-    }
-  }
-  if (nearby_sides == (std::vector<Side>){BASE_LEFT, BASE_RIGHT} ||
-      nearby_sides == (std::vector<Side>){BASE_LEFT, BASE_RIGHT, BASE_BACK}) {
-    if (side_is_sensed(probing_location, base_back_offset, expected_surface_heights, BASE_BACK)) {
-      return BASE_BACK;
-    } else {
-      return get_side_if_sensed(probing_location, base_left_offset, expected_surface_heights, BASE_LEFT, BASE_RIGHT);
-    }
-  }
-  if (nearby_sides == (std::vector<Side>){BASE_RIGHT, BASE_BACK}) {
-    return get_side_if_sensed(probing_location, base_back_offset, expected_surface_heights, BASE_BACK, BASE_RIGHT);
-  }
+  SERIAL_EOL();
   return Side::UNKNOWN;
 }
 
@@ -952,8 +899,7 @@ float probe_at_point_to_height(const xy_pos_t & position, const float stop_heigh
 
 // bottom left is the first quadrant, then goes clockwise around
 xy_pos_t get_probing_location(const int quadrant, const int subquadrant) {
-  //const xy_pos_t bottom_left_quadrant_probing_location = {47.0, 80.0};
-  const xy_pos_t bottom_left_quadrant_probing_location = {55.5, 82.5};
+  const xy_pos_t bottom_left_quadrant_probing_location = {55.5, 101.25};
   const float quadrant_offsets[2] = {205.5, 205.0};
   const float subquadrant_offsets[2] = {98.2, 100.3};
   xy_pos_t probing_location = bottom_left_quadrant_probing_location;
