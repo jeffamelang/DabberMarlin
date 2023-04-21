@@ -240,13 +240,18 @@ void purge_nozzle() {
 
 void park_nozzle_in_bath() {
   SERIAL_ECHOLNPGM("in park_nozzle_in_bath.");
+  bool need_to_park_after_homing = have_homed_all_axes;
   move_cleaning_station_to_safe_movement_height();
-  // Move the nozzle to the parking position
-  SERIAL_ECHOLNPGM("Moving to parking position.");
-  go_to_xy(BATH_PARKING_POSITION);
-  // Move the cleaning station up
-  SERIAL_ECHOLNPGM("Raising cleaning station.");
-  move_cleaning_station_to_height(BATH_PARKING_HEIGHT);
+  if (need_to_park_after_homing) {
+    // Move the nozzle to the parking position
+    SERIAL_ECHOLNPGM("Moving to parking position.");
+    go_to_xy(BATH_PARKING_POSITION);
+    // Move the cleaning station up
+    SERIAL_ECHOLNPGM("Raising cleaning station.");
+    move_cleaning_station_to_height(BATH_PARKING_HEIGHT);
+  } else {
+    SERIAL_ECHOLNPGM("No need to park after homing, since we should already be parked");
+  }
 }
 
 void dry_nozzle_tip() {
