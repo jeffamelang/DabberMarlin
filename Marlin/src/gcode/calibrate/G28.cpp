@@ -194,15 +194,16 @@
       
 #endif // IMPROVE_HOMING_RELIABILITY
 
+static bool have_homed_all_axes = false;
 static const xy_pos_t BATH_PARKING_POSITION = {30., 2.};
 static const xy_pos_t NOZZLE_SIDE_WIPE_POSITION = {67.2, 7.};
 static const xy_pos_t NOZZLE_PURGE_POSITION = {99., 1.};
 static const xy_pos_t TIP_WIPE_TOP_LEFT = {133., 10.};
 static const float SAFE_BATH_MOVEMENT_HEIGHT = 28;
 static const float BATH_PARKING_HEIGHT = 49;
-static const float CLEANING_STATION_VERTICAL_MOVEMENT_RATE = 3;
+static const float CLEANING_STATION_VERTICAL_MOVEMENT_RATE = 6;
 static const float NOZZLE_SIDE_WIPE_OFFSET = 4.5;
-static const float NOZZLE_SIDE_WIPE_HEIGHT = 40;
+static const float NOZZLE_SIDE_WIPE_HEIGHT = 37;
 static const float NOZZLE_TIP_WIPE_HEIGHT = 37;
 const std::vector<xy_pos_t> SIDE_WIPE_VECTORS =
     {{NOZZLE_SIDE_WIPE_OFFSET, 0.0},
@@ -216,9 +217,8 @@ void move_cleaning_station_to_height(float height) {
 
 void move_cleaning_station_to_safe_movement_height() {
   SERIAL_ECHOLNPGM("Moving cleaning station to safe movement height");
-  static bool has_homed = false;
-  if (has_homed) {
-    has_homed = true;
+  if (!have_homed_all_axes) {
+    have_homed_all_axes = true;
     SERIAL_ECHOLNPGM("Homing all axes because they haven't yet been homed.");
     gcode.G28();
   } else {
@@ -233,9 +233,9 @@ void purge_nozzle() {
   // Move the nozzle to the purging position
   go_to_xy(NOZZLE_PURGE_POSITION);
 
-  //const float feedrate_extrude_mm_s = 50;
-  //const float purging_mm = 200;
-  //unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
+  const float feedrate_extrude_mm_s = 50;
+  const float purging_mm = 100;
+  unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
 }
 
 void park_nozzle_in_bath() {
@@ -296,6 +296,13 @@ void after_sensing_prepare_to_dab() {
   move_cleaning_station_to_safe_movement_height();
   purge_nozzle();
   dry_nozzle_tip();
+}
+
+void park_after_dabbing() {
+  SERIAL_ECHOLNPGM("After dabbings, parking in bath.");
+  move_cleaning_station_to_safe_movement_height();
+  dry_nozzle_tip();
+  park_nozzle_in_bath();
 }
 
 /**
@@ -478,8 +485,7 @@ void GcodeSuite::G28() {
   homeaxis(I_AXIS);
   SERIAL_ECHOLNPGM("DONE Homing the cleaning station to get it out of the way.");
 
-  static bool has_homed_all_axes = false;
-  if (!has_homed_all_axes) {
+  if (!have_homed_all_axes) {
     SERIAL_ECHOLNPGM("HAVEN'T yet homed all axes yet, homing all axes.");
   } else {
     SERIAL_ECHOLNPGM("Have ALREADY homed all axes yet, homing all axes.");
@@ -534,7 +540,7 @@ void GcodeSuite::G28() {
                   constexpr bool doZ = false;
           #endif
       
-          TERN_(HOME_Z_FIRST, if (!has_homed_all_axes || doZ) homeaxis(Z_AXIS));
+          TERN_(HOME_Z_FIRST, if (!have_homed_all_axes || doZ) homeaxis(Z_AXIS));
       
           const bool seenR = parser.seenval('R');
           const float z_homing_height = seenR ? parser.value_linear_units() : Z_HOMING_HEIGHT;
@@ -556,7 +562,7 @@ void GcodeSuite::G28() {
 
       
           // Home X
-          if (!has_homed_all_axes || doX || (doY && ENABLED(CODEPENDENT_XY_HOMING) && DISABLED(HOME_Y_BEFORE_X))) {
+          if (!have_homed_all_axes || doX || (doY && ENABLED(CODEPENDENT_XY_HOMING) && DISABLED(HOME_Y_BEFORE_X))) {
       
             #if ENABLED(DUAL_X_CARRIAGE)
             
@@ -595,7 +601,7 @@ void GcodeSuite::G28() {
 
           // Home Y (after X)
           //if (DISABLED(HOME_Y_BEFORE_X) && doY)
-          if (!has_homed_all_axes || doY) {
+          if (!have_homed_all_axes || doY) {
             // Jeff, now we jog to the right a bit before homing Y because we can't reach the bottom left corner.
             float jogged_x_position = std::min(float(X_BED_SIZE - 5), current_position.x+50.0f);
             go_to_xy({jogged_x_position, current_position.y});
@@ -757,7 +763,7 @@ void GcodeSuite::G28() {
 
   TERN_(FULL_REPORT_TO_HOST_FEATURE, set_and_report_grblstate(old_grblstate));
 
-  has_homed_all_axes = true;
+  have_homed_all_axes = true;
   SERIAL_ECHOLNPGM("Done homing");
 }
 
@@ -790,15 +796,32 @@ Side identify_side_from_surface_height(const double surface_height) {
   const std::map<Side, float> expected_surface_heights =
     { 
       {LID_FRONT, 151.9},
-      {LID_TOP, 119.5},
-      {LID_BACK, 150.2},
-      {LID_RIGHT, 149.2},
-      {LID_LEFT, 148.3},
-      {BASE_LEFT, 145.7},
-      {BASE_BACK, 143.3},
+      // lid front - base front: bottom edge of base front
       {BASE_FRONT, 151.0},
+      // lid front - lid back: bottom edge of lid back
+      // base front - lid back: bottom edge of base front
+      {LID_BACK, 150.2},
+      // base front - lid right: bottom right of base front
+      // lid back - lid right: cul de sac
+      {LID_RIGHT, 149.2},
+      // lid back - lid left: cul de sac on lid left
+      // lid right - lid left: cul de sac on lid left
+      {LID_LEFT, 148.3},
+      // lid right - base bottom: bottom right of base bottom
+      // lid left - base bottom: bottom right of base bottom
+      {BASE_BOTTOM, 146.8},
+      // lid left - base left: bottom right of base left
+      // base bottom - base left: middle right of base bottom
+      {BASE_LEFT, 145.7},
+      // base bottom - base right: middle right of base bottom
+      // base left - base right: hinge area of base right
       {BASE_RIGHT, 144.4},
-      {BASE_BOTTOM, 147.0}
+      // base left - base back: middle right of base back
+      // base right - base back: middle right of base back
+      {BASE_BACK, 143.3},
+      // base right - lid top: middle right of lid top
+      // base back - lid top: middle right of lid top
+      {LID_TOP, 119.5}
      };
   const double tolerance = 0.4;
   for (auto e : expected_surface_heights) {
@@ -1290,15 +1313,17 @@ for each quadrant
     */
 void GcodeSuite::M1399() { 
   G28();
+  prepare_nozzle_for_sensing();
   const double cruising_altitude = 160;
 
   const int number_of_quadrants = 1;
-  const int number_of_subquadrants = 4;
+  const int number_of_subquadrants = 1;
 
   std::vector<Side> quadrant_sides(number_of_quadrants, Side::UNKNOWN);
   std::vector<std::vector<float>> surface_heights(number_of_quadrants, std::vector<float>(number_of_subquadrants, NAN));
   std::vector<std::vector<xy_pos_t>> upper_left_corners(number_of_quadrants, std::vector<xy_pos_t>(number_of_subquadrants, {NAN, NAN}));
   std::vector<std::vector<std::map<double, std::vector<std::pair<xy_pos_t, float>>>>> surface_probing_points(number_of_quadrants, std::vector<std::map<double, std::vector<std::pair<xy_pos_t, float>>>>(number_of_subquadrants));
+  int number_of_sides_to_dab = 0;
   for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
     // Try to identify all sides in this quadrant
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
@@ -1379,71 +1404,80 @@ void GcodeSuite::M1399() {
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner at (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height, ", probing leveling points.");
       surface_probing_points[quadrant][subquadrant] = probe_leveling_points(upper_left_corner, quadrant_side, surface_height);
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY probed leveling points, proceeding to dab with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height);
+      ++number_of_sides_to_dab;
     }
   }
-  SERIAL_ECHOLNPGM("\n\n----------------------------------");
-  SERIAL_ECHOLNPGM("Done with probing, moving on to dabbing");
-  SERIAL_ECHOLNPGM("----------------------------------\n");
-  // Now that we've done all of the measuring for the sides, start dabbing.
-  bool already_stained_first_side = false;
-  for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
-    const Side quadrant_side = quadrant_sides[quadrant];
-    if (quadrant_side == UNKNOWN) {
-      SERIAL_ECHOLNPGM("We weren't able to determine a side type for quadrant ", quadrant, ", so we're skipping it.");
-      continue;
-    }
-    for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
-      const float surface_height = surface_heights[quadrant][subquadrant];
-      const xy_pos_t upper_left_corner = upper_left_corners[quadrant][subquadrant];
-      const std::map<double, std::vector<std::pair<xy_pos_t, float>>> & all_elevations_probing_points = surface_probing_points[quadrant][subquadrant];
-      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Dabbing with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height , " and ", all_elevations_probing_points.size(), " probing point elevations");
-      // Skip this side if we don't have all the information
-      if (isnan(surface_height) || isnan(upper_left_corner.x) || isnan(upper_left_corner.y) || all_elevations_probing_points.size() == 0) {
-        SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), we seem to be missing some data, so we're skipping it.");
-        // There is no side here; move to the next one
+  if (number_of_sides_to_dab > 0) {
+    SERIAL_ECHOLNPGM("\n\n----------------------------------");
+    SERIAL_ECHOLNPGM("Done with probing, moving on to dabbing");
+    SERIAL_ECHOLNPGM("----------------------------------\n");
+    after_sensing_prepare_to_dab();
+    // Now that we've done all of the measuring for the sides, start dabbing.
+    bool already_stained_first_side = false;
+    for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
+      const Side quadrant_side = quadrant_sides[quadrant];
+      if (quadrant_side == UNKNOWN) {
+        SERIAL_ECHOLNPGM("We weren't able to determine a side type for quadrant ", quadrant, ", so we're skipping it.");
         continue;
       }
-      // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
-      SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Constructing dabber with ", all_elevations_probing_points.size(), " elevations worth of probing points.");
-      for (auto iter = all_elevations_probing_points.begin(); iter != all_elevations_probing_points.end(); ++iter) {
-        SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Elevation ", iter->first, " has ", iter->second.size(), " points");
+      for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
+        const float surface_height = surface_heights[quadrant][subquadrant];
+        const xy_pos_t upper_left_corner = upper_left_corners[quadrant][subquadrant];
+        const std::map<double, std::vector<std::pair<xy_pos_t, float>>> & all_elevations_probing_points = surface_probing_points[quadrant][subquadrant];
+        SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Dabbing with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height , " and ", all_elevations_probing_points.size(), " probing point elevations");
+        // Skip this side if we don't have all the information
+        if (isnan(surface_height) || isnan(upper_left_corner.x) || isnan(upper_left_corner.y) || all_elevations_probing_points.size() == 0) {
+          SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), we seem to be missing some data, so we're skipping it.");
+          // There is no side here; move to the next one
+          continue;
+        }
+        // Now that we know the side and we've found the upper left corner, we call the dabbing routine specific to that side.
+        SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Constructing dabber with ", all_elevations_probing_points.size(), " elevations worth of probing points.");
+        for (auto iter = all_elevations_probing_points.begin(); iter != all_elevations_probing_points.end(); ++iter) {
+          SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Elevation ", iter->first, " has ", iter->second.size(), " points");
+        }
+        const Dabber* dabber = new Dabber(upper_left_corner, surface_height, all_elevations_probing_points);
+        if (!already_stained_first_side) {
+          do_a_priming_dab(*dabber, quadrant_side);
+          already_stained_first_side = true;
+        }
+        switch (quadrant_side) {
+          case BASE_BACK:
+            SERIAL_ECHOLNPGM("Starting to dab a base back");
+            dab_side_base_back(dabber);
+            break;
+          case BASE_LEFT:
+            SERIAL_ECHOLNPGM("Starting to dab a base left");
+            dab_side_base_left(dabber);
+            break;
+          case BASE_RIGHT:
+            SERIAL_ECHOLNPGM("Starting to dab a base right");
+            dab_side_base_right(dabber);
+            break;
+          case BASE_BOTTOM:
+            SERIAL_ECHOLNPGM("Starting to dab a base bottom");
+            dab_side_base_bottom(dabber);
+            break;
+          default:
+            SERIAL_ECHOLNPGM("Cannot print a side of type ", quadrant_side, ", add it to the switch statement.");
+        }
+        delete dabber;
       }
-      const Dabber* dabber = new Dabber(upper_left_corner, surface_height, all_elevations_probing_points);
-      if (!already_stained_first_side) {
-        do_a_priming_dab(*dabber, quadrant_side);
-        already_stained_first_side = true;
-      }
-      switch (quadrant_side) {
-        case BASE_BACK:
-          SERIAL_ECHOLNPGM("Starting to dab a base back");
-          dab_side_base_back(dabber);
-          break;
-        case BASE_LEFT:
-          SERIAL_ECHOLNPGM("Starting to dab a base left");
-          dab_side_base_left(dabber);
-          break;
-        case BASE_RIGHT:
-          SERIAL_ECHOLNPGM("Starting to dab a base right");
-          dab_side_base_right(dabber);
-          break;
-        case BASE_BOTTOM:
-          SERIAL_ECHOLNPGM("Starting to dab a base bottom");
-          dab_side_base_bottom(dabber);
-          break;
-        default:
-          SERIAL_ECHOLNPGM("Cannot print a side of type ", quadrant_side, ", add it to the switch statement.");
-      }
-      delete dabber;
     }
+    SERIAL_ECHOLNPGM("\n\n----------------------------------");
+    SERIAL_ECHOLNPGM("Done with dabbing! Dropping the bed.");
+    SERIAL_ECHOLNPGM("----------------------------------\n");
+  } else {
+    SERIAL_ECHOLNPGM("Couldn't find any sides to dab, quitting");
   }
-  SERIAL_ECHOLNPGM("\n\n----------------------------------");
-  SERIAL_ECHOLNPGM("Done with dabbing! Dropping the bed.");
-  SERIAL_ECHOLNPGM("----------------------------------\n");
+  park_after_dabbing();
   go_to_z(400);
 }
 
 void GcodeSuite::M1099() { 
+  SERIAL_ECHOLNPGM("Homing at the start of staining");
   G28();
+  SERIAL_ECHOLNPGM("Done homing at the start of staining");
   const float cruising_altitude = 80;
   const xy_pos_t primary_probing_locations[4] = 
   {
@@ -1536,5 +1570,6 @@ void GcodeSuite::M1299() {
 
 // Park nozzle
 void GcodeSuite::M1209() {
+  dry_nozzle_tip();
   park_nozzle_in_bath();
 }

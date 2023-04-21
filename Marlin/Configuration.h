@@ -67,7 +67,7 @@
 // Author info of this build printed to the host during boot and M115
 #define STRING_CONFIG_H_AUTHOR "(jeff, DABBER)" // Who made the changes.
 // Name displayed in the LCD "Ready" message and Info menu
-#define CUSTOM_MACHINE_NAME "DABBER.0.2"
+#define CUSTOM_MACHINE_NAME "DABBER.0.0"
 //#define CUSTOM_VERSION_FILE Version.h // Path from the root directory (no quotes)
 #define SHORT_BUILD_VERSION "aubrie's the best"
 // Feedrate (mm/min) for the first approach when double-probing (MULTIPLE_PROBING == 2)
@@ -76,7 +76,7 @@
 #define Z_PROBE_FEEDRATE_SLOW (Z_PROBE_FEEDRATE_FAST / 2)
 //#define Z_PROBE_FEEDRATE_SLOW (Z_PROBE_FEEDRATE_FAST / 3)
 // Homing speeds (linear=mm/min, rotational=°/min)
-#define HOMING_FEEDRATE_MM_M { (2*50*60), (2*50*60), (6*4*60), (6*4*60)/5 }
+#define HOMING_FEEDRATE_MM_M { (2*50*60), (2*50*60), (6*4*60), 6*60 }
 #define NO_AUTO_ASSIGN_WARNING
 #define DIAG_JUMPERS_REMOVED
 
@@ -1199,7 +1199,7 @@
  *                                      X, Y, Z [, I [, J [, K...]]], E0 [, E1[, E2...]]
  */
 //#define DEFAULT_MAX_FEEDRATE          { 500, 500, 5, 25 }
-#define DEFAULT_MAX_FEEDRATE          { 500, 500, 15, 2, 100 }
+#define DEFAULT_MAX_FEEDRATE          { 500, 500, 15, 15, 100 }
 
 //#define LIMITED_MAX_FR_EDITING        // Limit edit via M203 or LCD to DEFAULT_MAX_FEEDRATE * 2
 #if ENABLED(LIMITED_MAX_FR_EDITING)
