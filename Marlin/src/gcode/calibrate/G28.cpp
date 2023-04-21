@@ -786,56 +786,17 @@ void GcodeSuite::G28() {
     */
 enum Side { 
   UNKNOWN, 
+LID_FRONT, 
+BASE_FRONT, 
+LID_BACK, 
+LID_RIGHT, 
+LID_LEFT, 
+BASE_BOTTOM,  // Tuned
 BASE_LEFT,  // Next
 BASE_RIGHT, // Tuned
 BASE_BACK,  // Tuned
-BASE_FRONT, 
-BASE_BOTTOM,  // Tuned
-LID_LEFT, 
-LID_RIGHT, 
-LID_BACK, 
-LID_FRONT, 
-LID_TOP};
-
-Side identify_side_from_surface_height(const double surface_height) {
-  const std::map<Side, float> expected_surface_heights =
-    { 
-      {LID_FRONT, 151.9},
-      // lid front - base front: bottom edge of base front
-      {BASE_FRONT, 151.0},
-      // lid front - lid back: bottom edge of lid back
-      // base front - lid back: bottom edge of base front
-      {LID_BACK, 150.2},
-      // base front - lid right: bottom right of base front
-      // lid back - lid right: cul de sac
-      {LID_RIGHT, 149.2},
-      // lid back - lid left: cul de sac on lid left
-      // lid right - lid left: cul de sac on lid left
-      {LID_LEFT, 148.3},
-      // lid right - base bottom: bottom right of base bottom
-      // lid left - base bottom: bottom right of base bottom
-      {BASE_BOTTOM, 146.8},
-      // lid left - base left: bottom right of base left
-      // base bottom - base left: middle right of base bottom
-      {BASE_LEFT, 145.7},
-      // base bottom - base right: middle right of base bottom
-      // base left - base right: hinge area of base right
-      {BASE_RIGHT, 144.4},
-      // base left - base back: middle right of base back
-      // base right - base back: middle right of base back
-      {BASE_BACK, 143.3},
-      // base right - lid top: middle right of lid top
-      // base back - lid top: middle right of lid top
-      {LID_TOP, 119.5}
-     };
-  const double tolerance = 0.4;
-  for (auto e : expected_surface_heights) {
-    if ((fabs(surface_height - e.second)) < tolerance) {
-      return e.first;
-    }
-  }
-  return UNKNOWN;
-}
+LID_TOP
+};
 
 float find_surface_height(const xy_pos_t & position, const float stop_height) {
   go_to_xy(position);
@@ -845,6 +806,132 @@ float find_surface_height(const xy_pos_t & position, const float stop_height) {
 float find_surface_height(const xy_pos_t & position) {
   const float height_at_which_slot_is_empty = 118;
   return find_surface_height(position, height_at_which_slot_is_empty);
+}
+
+bool side_is_sensed(const xy_pos_t probing_location, const xy_pos_t offset, std::map<Side, float> expected_surface_heights, const Side ifThere) {
+  const float depth_tolerance = 1.5;
+  return !isnan(find_surface_height(probing_location + offset, expected_surface_heights[ifThere] - depth_tolerance));
+}
+
+Side get_side_if_sensed(const xy_pos_t probing_location, const xy_pos_t offset, const std::map<Side, float> expected_surface_heights, const Side ifThere, const Side ifNot) {
+  if (side_is_sensed(probing_location, offset, expected_surface_heights, ifThere)) {
+    return ifThere;
+  } else {
+    return ifNot;
+  }
+}
+
+Side identify_side(const double surface_height, const xy_pos_t probing_location) {
+  const std::map<Side, float> expected_surface_heights =
+    { 
+      {LID_FRONT, 151.9},
+      {BASE_FRONT, 151.0},
+      {LID_BACK, 150.2},
+      {LID_RIGHT, 149.2},
+      {LID_LEFT, 148.3},
+      {BASE_BOTTOM, 146.8},
+      {BASE_LEFT, 145.7},
+      {BASE_RIGHT, 144.4},
+      {BASE_BACK, 143.3},
+      {LID_TOP, 119.5}
+     };
+  const double tolerance = 1.0;
+  std::vector<Side> nearby_sides;
+  for (auto e : expected_surface_heights) {
+    if ((fabs(surface_height - e.second)) < tolerance) {
+      nearby_sides.push_back(e.first);
+    }
+  }
+  if (nearby_sides.size() == 0) {
+    return UNKNOWN;
+  }
+  if (nearby_sides.size() == 1) {
+    return nearby_sides[0];
+  }
+  std::sort(nearby_sides.begin(), nearby_sides.end());
+  const xy_pos_t base_front_bottom_offset = {0., -44.5};
+  const xy_pos_t lid_right_vs_back_offset = {8.5, 4.5};
+  const xy_pos_t lid_left_offset = {-5.5, -4.5};
+  const xy_pos_t base_bottom_offset = {0., -55.5};
+  const xy_pos_t base_back_offset = {0., -55.5};
+  const xy_pos_t base_left_offset = {24.5, -47.5};
+  if (nearby_sides == (std::vector<Side>){LID_FRONT, BASE_FRONT} ||
+      nearby_sides == (std::vector<Side>){LID_FRONT, BASE_FRONT, LID_BACK}) {
+    if (side_is_sensed(probing_location, base_front_bottom_offset, expected_surface_heights, BASE_FRONT)) {
+      return BASE_FRONT;
+    } else {
+      if (nearby_sides.size() == 2) {
+        return LID_FRONT;
+      } else {
+        const xy_pos_t offset2 = {0., 15.5};
+        return get_side_if_sensed(probing_location, offset2, expected_surface_heights, LID_BACK, LID_FRONT);
+      }
+    }
+  }
+  if (nearby_sides == (std::vector<Side>){BASE_FRONT, LID_BACK} ||
+      nearby_sides == (std::vector<Side>){BASE_FRONT, LID_BACK, LID_RIGHT}) {
+    if (side_is_sensed(probing_location, base_front_bottom_offset, expected_surface_heights, BASE_FRONT)) {
+      return BASE_FRONT;
+    } else {
+      if (nearby_sides.size() == 2) {
+        return LID_BACK;
+      } else {
+        return get_side_if_sensed(probing_location, lid_right_vs_back_offset, expected_surface_heights, LID_RIGHT, LID_BACK);
+      }
+    }
+  }
+  if (nearby_sides == (std::vector<Side>){LID_BACK, LID_RIGHT} ||
+      nearby_sides == (std::vector<Side>){LID_BACK, LID_RIGHT, LID_LEFT}) {
+    if (side_is_sensed(probing_location, lid_left_offset, expected_surface_heights, LID_LEFT)) {
+      return LID_LEFT;
+    } else {
+      return get_side_if_sensed(probing_location, lid_right_vs_back_offset, expected_surface_heights, LID_RIGHT, LID_BACK);
+    }
+  }
+  if (nearby_sides == (std::vector<Side>){LID_RIGHT, LID_LEFT} ||
+      nearby_sides == (std::vector<Side>){LID_RIGHT, LID_LEFT, BASE_BOTTOM}) {
+    if (side_is_sensed(probing_location, base_bottom_offset, expected_surface_heights, BASE_BOTTOM)) {
+      return BASE_BOTTOM;
+    } else {
+      return get_side_if_sensed(probing_location, lid_left_offset, expected_surface_heights, LID_LEFT, LID_RIGHT);
+    }
+  }
+  if (nearby_sides == (std::vector<Side>){LID_LEFT, BASE_BOTTOM} ||
+      nearby_sides == (std::vector<Side>){LID_LEFT, BASE_BOTTOM, BASE_LEFT}) {
+    if (side_is_sensed(probing_location, base_bottom_offset, expected_surface_heights, BASE_BOTTOM)) {
+      return BASE_BOTTOM;
+    } else {
+      if (nearby_sides.size() == 2) {
+        return LID_LEFT;
+      } else {
+        return get_side_if_sensed(probing_location, base_left_offset, expected_surface_heights, BASE_LEFT, LID_LEFT);
+      }
+    }
+  }
+  if (nearby_sides == (std::vector<Side>){BASE_BOTTOM, BASE_LEFT} ||
+      nearby_sides == (std::vector<Side>){BASE_BOTTOM, BASE_LEFT, BASE_RIGHT}) {
+    if (side_is_sensed(probing_location, base_bottom_offset, expected_surface_heights, BASE_BOTTOM)) {
+      return BASE_BOTTOM;
+    } else {
+      if (nearby_sides.size() == 2) {
+        return BASE_LEFT;
+      } else {
+        return get_side_if_sensed(probing_location, base_left_offset, expected_surface_heights, BASE_LEFT, BASE_RIGHT);
+      }
+    }
+  }
+  if (nearby_sides == (std::vector<Side>){BASE_LEFT, BASE_RIGHT} ||
+      nearby_sides == (std::vector<Side>){BASE_LEFT, BASE_RIGHT, BASE_BACK}) {
+    if (side_is_sensed(probing_location, base_back_offset, expected_surface_heights, BASE_BACK)) {
+      return BASE_BACK;
+    } else {
+      return get_side_if_sensed(probing_location, base_left_offset, expected_surface_heights, BASE_LEFT, BASE_RIGHT);
+    }
+  }
+  if (nearby_sides == (std::vector<Side>){BASE_RIGHT, BASE_BACK}) {
+    return get_side_if_sensed(probing_location, base_back_offset, expected_surface_heights, BASE_BACK, BASE_RIGHT);
+  }
+  return Side::UNKNOWN;
 }
 
 float find_subquadrant_height(const xy_pos_t & position) {
@@ -1342,37 +1429,38 @@ void GcodeSuite::M1399() {
       SERIAL_ECHOPGM("(", quadrant, ":", subquadrant, "), Found surface height of");
       if (isnan(surface_height)) {
         SERIAL_ECHOPGM(" NO SIDE");
+        SERIAL_EOL();
       } else {
         SERIAL_ECHOPGM(" ", surface_height);
+        SERIAL_EOL();
+        // If we haven't yet identified this quadrant's side, then do it now.
+        if (quadrant_sides[quadrant] == Side::UNKNOWN) {
+          const Side quadrant_side = identify_side(surface_height, probing_location);
+          quadrant_sides[quadrant] = quadrant_side;
+        }
       }
-      SERIAL_EOL();
       surface_heights[quadrant][subquadrant] = surface_height;
     }
     // Make sure we're at a safe altitude to move around without running into things.
     go_to_z(cruising_altitude);
 
     // Make sure that all subquadrants identify the same side or no side
-    float probed_height_total = 0;
     int number_of_non_empty_sides = 0;
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
       const float probed_height = surface_heights[quadrant][subquadrant];
       if (!isnan(probed_height)) {
         ++number_of_non_empty_sides;
-        probed_height_total += probed_height;
       }
     }
-    if (probed_height_total < 0.01) {
+    if (number_of_non_empty_sides == 0) {
       SERIAL_ECHOLNPGM("Quadrant ", quadrant, ", it seems like there are no boxes, so we're skipping the quadrant.");
       continue;
     }
-    const float average_surface_height = probed_height_total / number_of_non_empty_sides;
-    const Side quadrant_side = identify_side_from_surface_height(average_surface_height);
-    quadrant_sides[quadrant] = quadrant_side;
-    if (quadrant_side == UNKNOWN) {
-      SERIAL_ECHOLNPGM("Could not identify side from average surface height of ", average_surface_height, ", skipping the quadrant.");
+    if (quadrant_sides[quadrant] == UNKNOWN) {
+      SERIAL_ECHOLNPGM("Could not identify side, skipping the quadrant.");
       continue;
     }
-    SERIAL_ECHOLNPGM("Quadrant ", quadrant, ", from average surface height of ", average_surface_height, ", found quadrant side of ", quadrant_side);
+    SERIAL_ECHOLNPGM("Quadrant ", quadrant, ", found quadrant side of ", quadrant_sides[quadrant]);
 
     // Now, gather data about each side in the quadrant.
     std::vector<xy_pos_t> subquadrant_upper_left_corner_hints(4, {NAN, NAN});
@@ -1388,7 +1476,7 @@ void GcodeSuite::M1399() {
       // start dabbing. First, we have to find the upper left corner. 
       const xy_pos_t probing_location = get_probing_location(quadrant, subquadrant);
       SERIAL_ECHOLNPGM("\n(", quadrant, ":", subquadrant, "), ==================== Looking for upper left corner ==================\n");
-      const xy_pos_t upper_left_corner = find_upper_left_corner(probing_location, quadrant_side, surface_height, subquadrant_upper_left_corner_hints[subquadrant]);
+      const xy_pos_t upper_left_corner = find_upper_left_corner(probing_location, quadrant_sides[quadrant], surface_height, subquadrant_upper_left_corner_hints[subquadrant]);
       if (subquadrant == 0) {
         subquadrant_upper_left_corner_hints[1].x = upper_left_corner.x;
         subquadrant_upper_left_corner_hints[3].y = upper_left_corner.y;
@@ -1407,7 +1495,7 @@ void GcodeSuite::M1399() {
       } 
 
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner at (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height, ", probing leveling points.");
-      surface_probing_points[quadrant][subquadrant] = probe_leveling_points(upper_left_corner, quadrant_side, surface_height);
+      surface_probing_points[quadrant][subquadrant] = probe_leveling_points(upper_left_corner, quadrant_sides[quadrant], surface_height);
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY probed leveling points, proceeding to dab with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height);
       ++number_of_sides_to_dab;
     }
