@@ -216,13 +216,13 @@ void move_cleaning_station_to_height(float height) {
 }
 
 void move_cleaning_station_to_safe_movement_height() {
-  SERIAL_ECHOLNPGM("Moving cleaning station to safe movement height");
+  //SERIAL_ECHOLNPGM("Moving cleaning station to safe movement height");
   if (!have_homed_all_axes) {
     have_homed_all_axes = true;
-    SERIAL_ECHOLNPGM("Homing all axes because they haven't yet been homed.");
+    //SERIAL_ECHOLNPGM("Homing all axes because they haven't yet been homed.");
     gcode.G28();
   } else {
-    SERIAL_ECHOLNPGM("NOT Homing all axes because they have already been homed.");
+    //SERIAL_ECHOLNPGM("NOT Homing all axes because they have already been homed.");
   }
   move_cleaning_station_to_height(SAFE_BATH_MOVEMENT_HEIGHT);
 }
@@ -239,9 +239,11 @@ void purge_nozzle() {
 }
 
 void park_nozzle_in_bath() {
-  SERIAL_ECHOLNPGM("in park_nozzle_in_bath.");
+  //SERIAL_ECHOLNPGM("in park_nozzle_in_bath.");
   bool need_to_park_after_homing = have_homed_all_axes;
   move_cleaning_station_to_safe_movement_height();
+  probe.deploy();
+  probe.stow();
   if (need_to_park_after_homing) {
     // Move the nozzle to the parking position
     SERIAL_ECHOLNPGM("Moving to parking position.");
@@ -330,6 +332,8 @@ void park_after_dabbing() {
  */
 void GcodeSuite::G28() {
   SERIAL_ECHOLNPGM("Homing");
+  probe.deploy();
+  probe.stow();
   DEBUG_SECTION(log_G28, "G28", DEBUGGING(LEVELING));
   if (DEBUGGING(LEVELING)) log_machine_info();
 
@@ -798,6 +802,23 @@ enum Side {
   LID_TOP
 };
 
+void print_side_to_serial_echopgm(const Side s) {
+  switch (s) {
+    case UNKNOWN: SERIAL_ECHOPGM("UNKNOWN"); break;
+    case BASE_LEFT: SERIAL_ECHOPGM("BASE_LEFT"); break;
+    case BASE_RIGHT: SERIAL_ECHOPGM("BASE_RIGHT"); break;
+    case BASE_BACK: SERIAL_ECHOPGM("BASE_BACK"); break;
+    case BASE_FRONT: SERIAL_ECHOPGM("BASE_FRONT"); break;
+    case BASE_BOTTOM: SERIAL_ECHOPGM("BASE_BOTTOM"); break;
+    case LID_LEFT: SERIAL_ECHOPGM("LID_LEFT"); break;
+    case LID_RIGHT: SERIAL_ECHOPGM("LID_RIGHT"); break;
+    case LID_BACK: SERIAL_ECHOPGM("LID_BACK"); break;
+    case LID_FRONT: SERIAL_ECHOPGM("LID_FRONT"); break;
+    case LID_TOP: SERIAL_ECHOPGM("LID_TOP"); break;
+    default: SERIAL_ECHOPGM("UNRECOGNIZED SIDE: ", s); break;
+  }
+}
+
 float find_surface_height(const xy_pos_t & position, const float stop_height) {
   go_to_xy(position);
   return probe.probe_at_point(position, PROBE_PT_NONE, /*verbose_level=*/2, /*probe_relative=*/false, /*sanity_check=*/false, stop_height, /*number_of_probes=*/1);
@@ -810,44 +831,60 @@ float find_surface_height(const xy_pos_t & position) {
 
 bool side_is_sensed(const xy_pos_t probing_location, const xy_pos_t offset, const float surface_height) {
   const float depth_tolerance = 1.5;
-  return !isnan(find_surface_height(probing_location + offset, surface_height - depth_tolerance));
+  const float cruising_altitude = surface_height + 2;
+  bool found_side = !isnan(find_surface_height(probing_location + offset, surface_height - depth_tolerance));
+  go_to_z(cruising_altitude);
+  return found_side;
+}
+
+void print_surface_signature(std::vector<bool> surface_signature) {
+  for (bool b : surface_signature) {
+    SERIAL_ECHOPGM(" ");
+    SERIAL_ECHOPGM(b ? "true" : "false");
+  }
 }
 
 Side identify_side(const double surface_height, const xy_pos_t probing_location) {
   // These aren't really necessary any more, but I leave them for reference.
   const std::map<Side, float> expected_surface_heights =
     { 
-      {LID_FRONT, 151.9},
-      {BASE_FRONT, 151.0},
-      {LID_BACK, 150.2},
-      {LID_RIGHT, 149.2},
-      {LID_LEFT, 148.3},
-      {BASE_BOTTOM, 146.8},
-      {BASE_LEFT, 145.7},
-      {BASE_RIGHT, 144.4},
-      {BASE_BACK, 143.3},
-      {LID_TOP, 119.5}
+      {LID_FRONT, 151.9}, // identifies
+      {BASE_FRONT, 151.0}, // identifies
+      {LID_BACK, 150.2}, // identifies
+      {LID_RIGHT, 149.2}, // identifies
+      {LID_LEFT, 148.3}, // identifies
+      {BASE_BOTTOM, 146.8}, // identifies
+      {BASE_LEFT, 145.7}, // identifies
+      {BASE_RIGHT, 144.4}, // identifies
+      {BASE_BACK, 143.3}, // identifies
+      {LID_TOP, 119.5} // identifies
      };
   if (surface_height < 130) {
     return LID_TOP;
   }
   const std::vector<xy_pos_t> surface_signature_probing_positions = 
   {
-    {30.0, 12.0},
-    {30.0, -8.0},
-    {-25.0, -41.0},
-    {34.0, -62.0},
-    {34.0, -73.75},
-    {27.0, -37.25}
+    // A little higher than initial probe, designed to find lid back
+    {20.5, 7.0},
+    // A little lower than initial probe, designed to find lid left and lid right
+    {22.5, -17.0},
+    // On base but not on lids
+    {15.0, -25.0},
+    // In lid left cul de sac
+    {-25.5, -46.0},
+    // Bottom edge of base front, to the right, to detect base front
+    {27.5, -71.0},
+    // Very bottom gap of base back, designed to differentiate between base back and base bottom
+    {27.5, -80.8}
   };
   const std::map<Side, std::vector<bool> > expected_surface_signatures = 
   {
     {BASE_LEFT, {false, false, true, true, true, false}},
     {BASE_RIGHT, {true, true, true, true, false, false}},
     {BASE_BACK, {true, true, true, true, true, false}},
-    {BASE_FRONT, {false, false, false, false, true, false}},
+    {BASE_FRONT, {false, false, false, true, true, false}},
     {BASE_BOTTOM, {true, true, true, true, true, true}},
-    {LID_LEFT, {true, true, true, false, false, false}},
+    {LID_LEFT, {true, true, false, true, false, false}},
     {LID_RIGHT, {true, true, false, false, false, false}},
     {LID_BACK, {true, false, false, false, false, false}},
     {LID_FRONT, {false, false, false, false, false, false}},
@@ -869,14 +906,16 @@ Side identify_side(const double surface_height, const xy_pos_t probing_location)
       }
     }
     if (matching_sides.size() == 1) {
+      SERIAL_ECHOPGM("Found Side of ");
+      print_side_to_serial_echopgm(matching_sides[0]);
+      SERIAL_ECHOPGM(" from surface signature of ");
+      print_surface_signature(surface_signature);
+      SERIAL_EOL();
       return matching_sides[0];
     }
   }
   SERIAL_ECHOPGM("ERROR: could not identify side with signature of");
-  for (bool b : surface_signature) {
-    SERIAL_ECHOPGM(" ");
-    SERIAL_ECHOPGM(b ? "true" : "false");
-  }
+  print_surface_signature(surface_signature);
   SERIAL_EOL();
   return Side::UNKNOWN;
 }
@@ -899,7 +938,7 @@ float probe_at_point_to_height(const xy_pos_t & position, const float stop_heigh
 
 // bottom left is the first quadrant, then goes clockwise around
 xy_pos_t get_probing_location(const int quadrant, const int subquadrant) {
-  const xy_pos_t bottom_left_quadrant_probing_location = {55.5, 101.25};
+  const xy_pos_t bottom_left_quadrant_probing_location = {55.0, 106.25};
   const float quadrant_offsets[2] = {205.5, 205.0};
   const float subquadrant_offsets[2] = {98.2, 100.3};
   xy_pos_t probing_location = bottom_left_quadrant_probing_location;
@@ -1406,7 +1445,10 @@ void GcodeSuite::M1399() {
       SERIAL_ECHOLNPGM("Could not identify side, skipping the quadrant.");
       continue;
     }
-    SERIAL_ECHOLNPGM("Quadrant ", quadrant, ", found quadrant side of ", quadrant_sides[quadrant]);
+    SERIAL_ECHOPGM("Quadrant ", quadrant, ", found quadrant side of ");
+    print_side_to_serial_echopgm(quadrant_sides[quadrant]);
+    SERIAL_EOL();
+    continue;
 
     // Now, gather data about each side in the quadrant.
     std::vector<xy_pos_t> subquadrant_upper_left_corner_hints(4, {NAN, NAN});
