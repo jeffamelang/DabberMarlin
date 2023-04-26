@@ -532,6 +532,7 @@ private:
   static void M1099();
   static void M1199();
   static void M1209();
+  static void M1219();
   static void M1249();
   static void M1299();
   static void M1399();

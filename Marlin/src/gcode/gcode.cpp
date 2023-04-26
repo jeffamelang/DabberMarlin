@@ -951,6 +951,7 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
       case 1249: M1249(); break;                                    // jeff's priming routine
       case 1299: M1299(); break;                                    // jeff's priming routine
       case 1209: M1209(); break;                                    // jeff's thing
+      case 1219: M1219(); break;                                    // jeff's thing
       case 1399: M1399(); break;                                    // jeff's staining routine
 
       #if IS_KINEMATIC

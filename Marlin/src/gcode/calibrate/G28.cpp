@@ -236,6 +236,8 @@ void purge_nozzle() {
   const float feedrate_extrude_mm_s = 50;
   const float purging_mm = 100;
   unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
+  // Wait a couple of seconds before zooming off.
+  gcode.dwell(2000);
 }
 
 void park_nozzle_in_bath() {
@@ -1448,7 +1450,6 @@ void GcodeSuite::M1399() {
     SERIAL_ECHOPGM("Quadrant ", quadrant, ", found quadrant side of ");
     print_side_to_serial_echopgm(quadrant_sides[quadrant]);
     SERIAL_EOL();
-    continue;
 
     // Now, gather data about each side in the quadrant.
     std::vector<xy_pos_t> subquadrant_upper_left_corner_hints(4, {NAN, NAN});
@@ -1653,4 +1654,13 @@ void GcodeSuite::M1299() {
 void GcodeSuite::M1209() {
   dry_nozzle_tip();
   park_nozzle_in_bath();
+}
+
+// Unpark nozzle
+void GcodeSuite::M1219() {
+  probe.deploy();
+  probe.stow();
+  dry_nozzle_tip();
+  go_to_xy((xy_pos_t) {35.0, 66.0});
+  go_to_z(250.0);
 }
