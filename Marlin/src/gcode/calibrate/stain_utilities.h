@@ -11,11 +11,20 @@ static constexpr float FEEDRATE_XY_MM_S = 150;
 static constexpr float FEEDRATE_Z_MM_S = 25;
 static constexpr float FEEDRATE_EXTRUDE_MM_S = 70;
 
+void validate_xy(const xy_pos_t position) {
+  if (position.x < 0 || position.x > X_BED_SIZE || position.y < 0 || position.y > Y_BED_SIZE) {
+    SERIAL_ECHOLNPGM("Cannot move to position of (", position.x, ", ", position.y, "), it's not a valid position.");
+    gcode.dwell(500000000);
+  }
+}
+
 void go_to_xy(const xy_pos_t position) {
+  validate_xy(position);
   do_blocking_move_to_xy(position, FEEDRATE_XY_MM_S);
 }
 
 void go_to_xy_z(const xy_pos_t position, const float z) {
+  validate_xy(position);
   do_blocking_move_to_xy_z(position, z, FEEDRATE_XY_MM_S);
 }
 
@@ -70,8 +79,10 @@ private:
     return sqrt(v.x * v.x + v.y * v.y);
   }
   
-  xy_pos_t calculate_xy(const xy_pos_t position) const {
-    return _upper_left_corner + PROBE_TO_NOZZLE_XY_OFFSET + position;
+  xy_pos_t calculate_xy_using_corner_and_offset(const xy_pos_t position) const {
+    xy_pos_t p = _upper_left_corner + PROBE_TO_NOZZLE_XY_OFFSET + position;
+    SERIAL_ECHOLNPGM("Corner (", _upper_left_corner.x, ",", _upper_left_corner.y, "), offset (", PROBE_TO_NOZZLE_XY_OFFSET.x, ",", PROBE_TO_NOZZLE_XY_OFFSET.y, "), for position of (", position.x, ",", position.y, ") calculated final position of (", p.x, ",", p.y, ")");
+    return p;
   }
   
   float interpolate_surface_height(const xy_pos_t position, const float surface_offset_from_zero_height) const {
@@ -113,11 +124,11 @@ private:
   }
   
   void go_to_xy_from_upper_left_corner(const xy_pos_t position) const {
-    go_to_xy(calculate_xy(position));
+    go_to_xy(calculate_xy_using_corner_and_offset(position));
   }
 
   void go_to_xy_z_from_upper_left_corner(const xy_pos_t position, const float z, const float surface_offset_from_zero_height) const {
-    go_to_xy_z(calculate_xy(position), calculate_z(position, z, surface_offset_from_zero_height));
+    go_to_xy_z(calculate_xy_using_corner_and_offset(position), calculate_z(position, z, surface_offset_from_zero_height));
   }
 
   void go_to_z_from_surface(const xy_pos_t position, const float z, const float surface_offset_from_zero_height) const {
