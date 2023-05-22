@@ -8,7 +8,7 @@
 #include <vector>
 
 static constexpr float FEEDRATE_XY_MM_S = 150;
-static constexpr float FEEDRATE_Z_MM_S = 25;
+static constexpr float FEEDRATE_Z_MM_S = 35;
 static constexpr float FEEDRATE_EXTRUDE_MM_S = 70;
 
 void validate_xy(const xy_pos_t position) {
@@ -32,6 +32,17 @@ void go_to_z(const float z) {
   do_blocking_move_to_z(z, FEEDRATE_Z_MM_S);
 }
 
+void display_message(const char* message) {
+  LCD_MESSAGE_F(message);
+}
+
+void display_message_and_wait_for_button_push(const char* message) {
+  display_message(message);
+  while (!ui.button_pressed()) {
+    safe_delay(50);
+  }
+}
+
 class Dabber {
 public:
   static constexpr float PROBE_TO_NOZZLE_Z_OFFSET = -1.5;
@@ -50,13 +61,15 @@ private:
   static constexpr float STAINING_EXTRUSION_MULTIPLIER = 9.0;
   static constexpr float RETRACTION_MM = 0.0/STAINING_EXTRUSION_MULTIPLIER;
   static constexpr float NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH = 0.25;
+  static constexpr float MINIMUM_EXTRUSION_MM = 0.05;
 
   void go_to_cruising_altitude() const {
     go_to_z(_max_surface_height + CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET);
   }
   
   void extrude_stain(const float extrusion_mm) const {
-    unscaled_e_move(STAINING_EXTRUSION_MULTIPLIER * extrusion_mm, FEEDRATE_EXTRUDE_MM_S);
+    const float adjusted_extrusion_mm = extrusion_mm > 0.01 ? std::max(MINIMUM_EXTRUSION_MM, extrusion_mm) : 0;
+    unscaled_e_move(STAINING_EXTRUSION_MULTIPLIER * adjusted_extrusion_mm, FEEDRATE_EXTRUDE_MM_S);
   }
 
   void unretract_and_extrude_stain(const float extrusion_mm) const {
@@ -80,7 +93,7 @@ private:
   }
   
   xy_pos_t calculate_xy_using_corner_and_offset(const xy_pos_t position) const {
-    xy_pos_t p = _upper_left_corner + PROBE_TO_NOZZLE_XY_OFFSET + position;
+    const xy_pos_t p = _upper_left_corner + PROBE_TO_NOZZLE_XY_OFFSET + position;
     SERIAL_ECHOLNPGM("Corner (", _upper_left_corner.x, ",", _upper_left_corner.y, "), offset (", PROBE_TO_NOZZLE_XY_OFFSET.x, ",", PROBE_TO_NOZZLE_XY_OFFSET.y, "), for position of (", position.x, ",", position.y, ") calculated final position of (", p.x, ",", p.y, ")");
     return p;
   }
@@ -114,13 +127,17 @@ private:
           SERIAL_ECHOLNPGM("Calculated in invalid interpolated surface height of ", interpolated_surface_height, " when max is ", _max_surface_height, " and min is ", _min_surface_height);
           gcode.dwell(500000000);
         }
+        SERIAL_ECHOLNPGM("For position (", position.x, ",", position.y, "), interpolated a surface height of ", interpolated_surface_height);
         return interpolated_surface_height;
       }
     }
   }
   
   float calculate_z(const xy_pos_t position, const float z, const float surface_offset_from_zero_height) const {
-    return interpolate_surface_height(position, surface_offset_from_zero_height) + PROBE_TO_NOZZLE_Z_OFFSET + z;
+    const float interpolated_surface_height = interpolate_surface_height(position, surface_offset_from_zero_height);
+    const float total_z = interpolated_surface_height + PROBE_TO_NOZZLE_Z_OFFSET + z;
+    SERIAL_ECHOLNPGM("For position (", position.x, ",", position.y, "), calculated total z of ", total_z, " from interpolated surface height of ", interpolated_surface_height, ", offset of ", PROBE_TO_NOZZLE_Z_OFFSET, ", and z of ", z);
+    return total_z;
   }
   
   void go_to_xy_from_upper_left_corner(const xy_pos_t position) const {
@@ -154,23 +171,38 @@ public:
   }
 
   void dab(const xy_pos_t position, const float extrusion_mm, const float surface_offset_from_zero_height, const xy_pos_t post_dab_scoot, const xy_pos_t approach_from, const bool is_a_boundary_dab) const {
+    //SERIAL_ECHOLNPGM("Dabbing with position of (", position.x, ", ", position.y, "), surface offset of ", surface_offset_from_zero_height, ", post dab scoot of (", post_dab_scoot.x, ",", post_dab_scoot.y, "), approach from of (", approach_from.x, ",", approach_from.y, ")");
     // Make sure we're at cruising altitude
     go_to_cruising_altitude();
     // Even if approach_from is the zero vector, this works
-    go_to_xy_from_upper_left_corner(position + approach_from);
+    const xy_pos_t possible_offsetted_position = position + approach_from;
+    //SERIAL_ECHOLNPGM("Moving to possible offsetted position of (", possible_offsetted_position.x, ", ", possible_offsetted_position.y, ")");
+    //display_message_and_wait_for_button_push("Moving to offset");
+    go_to_xy_from_upper_left_corner(possible_offsetted_position);
     // Extrude the stain for this dab
     unretract_and_extrude_stain(extrusion_mm);
     // Lower and do the actual dab
     const float embossing_extra_depth = is_a_boundary_dab ? 0 : NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH;
-    const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT + surface_offset_from_zero_height - embossing_extra_depth;
+    //const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT + surface_offset_from_zero_height - embossing_extra_depth;
+    const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT - embossing_extra_depth;
     if (!vector_is_zero(approach_from)) {
-      go_to_z_from_surface(position, dabbing_height + APPROACH_FROM_Z_OFFSET + vector_magnitude(approach_from), surface_offset_from_zero_height);
+      const float total_z_offset = dabbing_height + APPROACH_FROM_Z_OFFSET + vector_magnitude(approach_from);
+      //SERIAL_ECHOLNPGM("Preparing to approach at (", position.x, ", ", position.y, "), offset of (", dabbing_height, " + ", APPROACH_FROM_Z_OFFSET, " + ", vector_magnitude(approach_from), ") = ", total_z_offset);
+      //display_message_and_wait_for_button_push("Preparing approach");
+      go_to_z_from_surface(position, total_z_offset, surface_offset_from_zero_height);
+      //SERIAL_ECHOLNPGM("Approaching to (", position.x, ", ", position.y, "), offset of (", dabbing_height, " + ", APPROACH_FROM_Z_OFFSET, ") = ", dabbing_height + APPROACH_FROM_Z_OFFSET);
+      //display_message_and_wait_for_button_push("Approaching");
       go_to_xy_z_from_upper_left_corner(position, dabbing_height + APPROACH_FROM_Z_OFFSET, surface_offset_from_zero_height);
     }
+    //SERIAL_ECHOLNPGM("At (", position.x, ", ", position.y, "), dropping to dabbing_height of ", dabbing_height);
+    //display_message_and_wait_for_button_push("Dabbing");
     go_to_z_from_surface(position, dabbing_height, surface_offset_from_zero_height);
     //gcode.dwell(5000000);
     if (!vector_is_zero(post_dab_scoot)) {
-      go_to_xy_from_upper_left_corner(position + post_dab_scoot);
+      const xy_pos_t scooted_position = position + post_dab_scoot;
+      //SERIAL_ECHOLNPGM("Post dab scooting to (", scooted_position.x, ", ", scooted_position.y, "), dropping to dabbing_height of ", dabbing_height);
+      //display_message_and_wait_for_button_push("Scooting");
+      go_to_xy_from_upper_left_corner(scooted_position);
       gcode.dwell(500);
       go_to_xy_from_upper_left_corner(position);
     }

@@ -109,6 +109,8 @@ Endstops::endstop_mask_t Endstops::live_state = 0;
 
 void Endstops::init() {
 
+  SET_INPUT_PULLDOWN(SYRINGE_FULL_PIN);
+
   #if HAS_X_MIN
     #if ENABLED(ENDSTOPPULLUP_XMIN)
       SET_INPUT_PULLUP(X_MIN_PIN);
@@ -708,6 +710,24 @@ void __O2 Endstops::report_states() {
  * axes moving in the direction of their endstops, and abort moves.
  */
 void Endstops::update() {
+  static int number_of_syringe_full_readings = 0;
+  number_of_syringe_full_readings = TERN(READ(SYRINGE_FULL_PIN), number_of_syringe_full_readings + 1, 0);
+  static const int SYRINGE_FULL_READINGS_THRESHOLD = 5;
+
+  //if (number_of_syringe_full_readings > SYRINGE_FULL_READINGS_THRESHOLD) {
+  if (READ(SYRINGE_FULL_PIN)) {
+    SERIAL_ECHOLNPGM("It looks like the syringe is reading as full, stopping the planner");
+    if (stepper.axis_is_moving(E_AXIS)) {
+      if (stepper.motor_direction(E_AXIS)) { // -direction
+        SERIAL_ECHOLNPGM("Calling endstop_triggered");
+        planner.endstop_triggered(E_AXIS);
+      } else {
+         SERIAL_ECHOLNPGM("Wrong direction");
+      }
+    } else {
+      SERIAL_ECHOLNPGM("E_AXIS isn't moving");
+    }
+  }
 
   #if !ENDSTOP_NOISE_THRESHOLD      // If not debouncing...
     if (!abort_enabled()) return;   // ...and not enabled, exit.

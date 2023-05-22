@@ -411,12 +411,12 @@ void MarlinUI::init() {
 
       bool MarlinUI::external_control; // = false
 
-      void MarlinUI::wait_for_release() {
-        while (button_pressed()) safe_delay(50);
-        safe_delay(50);
-      }
-
     #endif
+
+    void MarlinUI::wait_for_release() {
+      while (button_pressed()) safe_delay(50);
+      safe_delay(50);
+    }
 
     #if !HAS_GRAPHICAL_TFT
 

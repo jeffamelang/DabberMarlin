@@ -201,15 +201,15 @@
 static bool probe_may_be_sticking_out = true;
 static bool have_homed_all_axes = false;
 static const xy_pos_t BATH_PARKING_POSITION = {30., 2.};
-static const xy_pos_t NOZZLE_SIDE_WIPE_POSITION = {67.2, 7.};
-static const xy_pos_t NOZZLE_PURGE_POSITION = {99., 1.};
-static const xy_pos_t TIP_WIPE_TOP_LEFT = {133., 10.};
-static const float SAFE_BATH_MOVEMENT_HEIGHT = 28;
-static const float BATH_PARKING_HEIGHT = 49;
+static const xy_pos_t NOZZLE_SIDE_WIPE_POSITION = {115.2, 8.0};
+static const xy_pos_t NOZZLE_PURGE_POSITION = {82.75, 1.};
+static const xy_pos_t TIP_WIPE_TOP_LEFT = {134.2, 10.};
+static const float SAFE_BATH_MOVEMENT_HEIGHT = 24;
+static const float BATH_PARKING_HEIGHT = 47.0;
 static const float CLEANING_STATION_VERTICAL_MOVEMENT_RATE = 6;
 static const float NOZZLE_SIDE_WIPE_OFFSET = 5.0;
 static const float NOZZLE_SIDE_WIPE_HEIGHT = 37;
-static const float NOZZLE_TIP_WIPE_HEIGHT = 37.5;
+static const float NOZZLE_TIP_WIPE_HEIGHT = 34.5;
 static const double STAINING_CRUISING_ALTITUDE = 160;
 const std::vector<xy_pos_t> SIDE_WIPE_VECTORS =
     {{NOZZLE_SIDE_WIPE_OFFSET, 0.0},
@@ -242,6 +242,14 @@ void make_sure_its_safe_to_move_over_cleaning_station() {
   move_cleaning_station_to_height(SAFE_BATH_MOVEMENT_HEIGHT);
 }
 
+void extrude_stain(float extrude_mm, float feedrate_mm_s) {
+  unscaled_e_move(extrude_mm, feedrate_mm_s);
+}
+
+void extrude_stain(float extrude_mm) {
+  extrude_stain(extrude_mm, FEEDRATE_EXTRUDE_MM_S);
+}
+
 void purge_nozzle() {
   SERIAL_ECHOLNPGM("Purging nozzle");
   make_sure_its_safe_to_move_over_cleaning_station();
@@ -250,7 +258,7 @@ void purge_nozzle() {
 
   const float feedrate_extrude_mm_s = 30;
   const float purging_mm = 50;
-  unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
+  extrude_stain(purging_mm, feedrate_extrude_mm_s);
   // Wait a couple of seconds before zooming off.
   gcode.dwell(4000);
 }
@@ -271,13 +279,24 @@ void park_nozzle_in_bath() {
   }
 }
 
-void wipe_nozzle_on_cup_side() {
-  SERIAL_ECHOLNPGM("Wiping the nozzle on the cup side");
+void wipe_nozzle_on_water_cup_side() {
+  SERIAL_ECHOLNPGM("Wiping the nozzle on the water cup side");
   make_sure_its_safe_to_move_over_cleaning_station();
   // Wipe the tip on the side of the cup.
-  go_to_xy((xy_pos_t) {111.0, 2.0});
-  move_cleaning_station_to_height(30.4);
-  go_to_xy((xy_pos_t) {125.0, 2.0});
+  go_to_xy(BATH_PARKING_POSITION);
+  //move_cleaning_station_to_height(27.6); // two magnets
+  move_cleaning_station_to_height(26.8);
+  go_to_xy((xy_pos_t) {42.0, BATH_PARKING_POSITION.y});
+  move_cleaning_station_to_height(SAFE_BATH_MOVEMENT_HEIGHT);
+}
+
+void wipe_nozzle_on_stain_cup_side() {
+  SERIAL_ECHOLNPGM("Wiping the nozzle on the stain cup side");
+  make_sure_its_safe_to_move_over_cleaning_station();
+  // Wipe the tip on the side of the cup.
+  go_to_xy((xy_pos_t) {NOZZLE_PURGE_POSITION.x + 12.0f, 2.0});
+  move_cleaning_station_to_height(29.6);
+  go_to_xy((xy_pos_t) {NOZZLE_PURGE_POSITION.x + 26.0f, 2.0});
   move_cleaning_station_to_height(SAFE_BATH_MOVEMENT_HEIGHT);
 }
 
@@ -285,7 +304,7 @@ void dry_nozzle_tip() {
   SERIAL_ECHOLNPGM("Drying the nozzle tip");
   //static const xy_pos_t TIP_WIPE_BOTTOM_RIGHT = {180., 0.};
   make_sure_its_safe_to_move_over_cleaning_station();
-  wipe_nozzle_on_cup_side();
+  wipe_nozzle_on_stain_cup_side();
   // 133, 139.7, 146.4, 153.1, 159.8, 166.5, 173.2, 180
   // 10, 5, 0
   static int current_index = -1;
@@ -327,6 +346,7 @@ void prepare_nozzle_for_sensing() {
   SERIAL_ECHOLNPGM("Preparing nozzle for sensing");
   make_sure_its_safe_to_move_over_cleaning_station();
   go_to_z(STAINING_CRUISING_ALTITUDE);
+  wipe_nozzle_on_water_cup_side();
   wipe_nozzle_sides();
   dry_nozzle_tip();
 }
@@ -335,7 +355,7 @@ void do_representative_dabs_in_current_position(int number_of_dabs) {
   const float representative_dab_mm = 9.0*0.4;
   for (int i = 0; i < number_of_dabs; ++i) {
     gcode.dwell(500);
-    unscaled_e_move(representative_dab_mm, FEEDRATE_EXTRUDE_MM_S);
+    extrude_stain(representative_dab_mm);
   }
 }
 
@@ -352,7 +372,7 @@ void after_sensing_prepare_to_dab() {
   make_sure_its_safe_to_move_over_cleaning_station();
   purge_nozzle();
   do_representative_dabs_in_nozzle_purge_position(30);
-  dry_nozzle_tip();
+  wipe_nozzle_on_stain_cup_side();
 }
 
 void park_after_dabbing() {
@@ -1028,8 +1048,23 @@ void do_a_priming_dab(const Dabber & dabber, const Side side) {
       {BASE_RIGHT, {45, -45}},
       {BASE_BOTTOM, {45, -45}}
       };
-  const float PRIMING_DAB_AMOUNT = 1.00;
-  dabber.dab(SIDE_CENTER_OFFSETS.find(side)->second, PRIMING_DAB_AMOUNT, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, 0.);
+  const std::map<Side, float> SIDE_HEIGHTS =
+    {
+      {LID_FRONT, 0.},
+      {LID_TOP, 0.},
+      {LID_BACK, 0.},
+      {LID_RIGHT, 0.},
+      {LID_LEFT, 0.},
+      {BASE_LEFT, 0.},
+      {BASE_BACK, 0.},
+      {BASE_FRONT, -3.},
+      {BASE_RIGHT, 0.},
+      {BASE_BOTTOM, 0.}
+      };
+  const float priming_dab_amount = 0.20;
+  for (int i = 0; i < 8; ++i) {
+    dabber.dab(SIDE_CENTER_OFFSETS.find(side)->second, priming_dab_amount, SIDE_HEIGHTS.find(side)->second, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, false);
+  }
 }
 
 ProbeResult probe_for_edge_at_point(const xy_pos_t & location, const float cruising_altitude, const float edge_found_height) {
@@ -1245,17 +1280,17 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
       {{0., {
         {90.0, -13.0},
         {45.0, -13.0},
-        {3.0, -13.0},
-        {3.0, -48.0},
-        {3.0, -79.0},
+        {4.0, -13.0},
+        {4.0, -48.0},
+        {4.0, -79.0},
         {45.0, -79.0},
         {90.0, -79.0}
       }},
        {-3.0, {
         {65.0, -88.0},
-        {3.0, -88.0},
-        {3.0, -2.0},
-        {65.0, -2.0},
+        {4.0, -88.0},
+        {4.0, -4.0},
+        {65.0, -4.0},
       }},
       }},
       {BASE_RIGHT, 
@@ -1303,7 +1338,7 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
 }
 
 xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height, const xy_pos_t upper_left_corner_hint) {
-  const xy_pos_t PROBE_OFFSET = {0.5, -0.4};
+  const xy_pos_t PROBE_TO_CORNER_OFFSET = {1.7, -0.4};
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
     { 
       {LID_FRONT, {0, 4.5}},
@@ -1378,7 +1413,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   const xy_pos_t top_edge_starting_location = probing_location + PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS.find(side)->second;
   if (!isnan(upper_left_corner_hint.y)) {
     SERIAL_ECHOLNPGM("Finding top edge WITH hint");
-    const xy_pos_t top_edge_starting_location_with_hint = {top_edge_starting_location.x, upper_left_corner_hint.y - PROBE_OFFSET.y - this_sides_after_probing_corner_find_offset.y};
+    const xy_pos_t top_edge_starting_location_with_hint = {top_edge_starting_location.x, upper_left_corner_hint.y - PROBE_TO_CORNER_OFFSET.y - this_sides_after_probing_corner_find_offset.y};
     top_edge = find_edge_with_hint(top_edge_starting_location_with_hint, {0., 1.}, surface_height, EXTRA_DEPTH_TOP_SIDE.find(side)->second);
   } else {
     SERIAL_ECHOLNPGM("Finding top edge WITHOUT hint");
@@ -1388,7 +1423,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   const xy_pos_t left_edge_starting_location = probing_location + PROBING_LOCATION_TO_LEFT_EDGE_INITIAL_OFFSETS.find(side)->second;
   if (!isnan(upper_left_corner_hint.x)) {
     SERIAL_ECHOLNPGM("Finding left edge with hint");
-    const xy_pos_t left_edge_starting_location_with_hint = {upper_left_corner_hint.x - PROBE_OFFSET.x - this_sides_after_probing_corner_find_offset.x, left_edge_starting_location.y};
+    const xy_pos_t left_edge_starting_location_with_hint = {upper_left_corner_hint.x - PROBE_TO_CORNER_OFFSET.x - this_sides_after_probing_corner_find_offset.x, left_edge_starting_location.y};
     left_edge = find_edge_with_hint(left_edge_starting_location_with_hint, {-1., 0.}, surface_height, EXTRA_DEPTH_LEFT_SIDE.find(side)->second);
   } else {
     SERIAL_ECHOLNPGM("Finding left edge WITHOUT hint");
@@ -1400,14 +1435,13 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   }
   const xy_pos_t probed_corner = {left_edge.x, top_edge.y};
   SERIAL_ECHOLNPGM("Found probed corner of (", probed_corner.x, ",", probed_corner.y, ")");
-  const xy_pos_t upper_left_corner = (xy_pos_t){left_edge.x, top_edge.y} + PROBE_OFFSET + this_sides_after_probing_corner_find_offset;
-  SERIAL_ECHOLNPGM("With probe and hard-coded offsets, returning upper left corner of (", upper_left_corner.x, ",", upper_left_corner.y, ")");
+  const xy_pos_t upper_left_corner = probed_corner + PROBE_TO_CORNER_OFFSET + this_sides_after_probing_corner_find_offset;
+  SERIAL_ECHOLNPGM("With probe and hard-coded offsets of (", PROBE_TO_CORNER_OFFSET.x, ",", PROBE_TO_CORNER_OFFSET.y, "), returning upper left corner of (", upper_left_corner.x, ",", upper_left_corner.y, ")");
   go_to_xy(upper_left_corner);
   return upper_left_corner;
 }
 
 /*
-bottom left probing position is x=25, y=89
 
 auto home
 move up to safe height
@@ -1429,13 +1463,10 @@ for each quadrant
     top left corner is the probable corner plus a side-specific offset.
     run the stainSide function for that side, passing it the top left corner
     */
-void GcodeSuite::M1399() { 
-  G28();
+void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) { 
+  gcode.G28();
   prepare_nozzle_for_sensing();
   probe_may_be_sticking_out = true;
-
-  const int number_of_quadrants = 1;
-  const int number_of_subquadrants = 1;
 
   std::vector<Side> quadrant_sides(number_of_quadrants, Side::UNKNOWN);
   std::vector<std::vector<float>> surface_heights(number_of_quadrants, std::vector<float>(number_of_subquadrants, NAN));
@@ -1611,23 +1642,34 @@ void GcodeSuite::M1399() {
   go_to_z(400);
 }
 
+void GcodeSuite::M1399() { 
+  stain_dragon_wolf(/*number_of_quadrants=*/4, /*number_of_subquadrants=*/4);
+}
+
+void GcodeSuite::M1398() { 
+  stain_dragon_wolf(/*number_of_quadrants=*/1, /*number_of_subquadrants=*/4);
+}
+
+void GcodeSuite::M1397() { 
+  stain_dragon_wolf(/*number_of_quadrants=*/1, /*number_of_subquadrants=*/1);
+}
+
 void GcodeSuite::M1099() { 
-  SERIAL_ECHOLNPGM("Homing at the start of staining");
   G28();
-  SERIAL_ECHOLNPGM("Done homing at the start of staining");
   const float cruising_altitude = 80;
   const xy_pos_t primary_probing_locations[4] = 
   {
-    {41, 15},
-    {41, 370},
-    {377, 370},
-    {377, 15},
+    {45, 35},
+    {45, 390},
+    {377, 390},
+    {377, 35},
   };
   const int number_of_primary_probing_locations = sizeof(primary_probing_locations)/sizeof(primary_probing_locations[0]);
   float primary_probing_location_heights[4] = {0., 0., 0., 0.};
   for (int i = 0; i < number_of_primary_probing_locations; ++i) {
     const xy_pos_t probing_location = primary_probing_locations[i];
     go_to_z(cruising_altitude);
+    make_sure_its_safe_to_move_over_cleaning_station();
     const float surface_height = find_surface_height(probing_location, 3);
     primary_probing_location_heights[i] = surface_height;
     SERIAL_ECHOLNPGM("Probing location ", i, " at (", probing_location.x, ",", probing_location.y, ") has height of ", surface_height);
@@ -1645,23 +1687,24 @@ void GcodeSuite::M1099() {
     const float average_height = (max_height + min_height)/2.;
     const xy_pos_t secondary_probing_locations[12] = 
     {
-      {41, 165},
-      {41, 220},
-      {171, 15},
-      {171, 165},
-      {171, 220},
-      {171, 370},
-      {248, 15},
-      {248, 165},
-      {248, 220},
-      {248, 370},
-      {377, 165},
-      {377, 220},
+      {46, 185},
+      {46, 240},
+      {171, 35},
+      {171, 185},
+      {171, 240},
+      {171, 390},
+      {248, 35},
+      {248, 185},
+      {248, 240},
+      {248, 390},
+      {377, 185},
+      {377, 240},
     };
     const int number_of_secondary_probing_locations = sizeof(secondary_probing_locations)/sizeof(secondary_probing_locations[0]);
     for (int i = 0; i < number_of_secondary_probing_locations; ++i) {
       const xy_pos_t probing_location = secondary_probing_locations[i];
       go_to_z(cruising_altitude);
+      make_sure_its_safe_to_move_over_cleaning_station();
       const float surface_height = find_surface_height(probing_location, 3);
       SERIAL_ECHOLNPGM("Probing location ", i, " at (", probing_location.x, ",", probing_location.y, ") has deviance of ", surface_height - average_height);
     }
@@ -1675,20 +1718,26 @@ void GcodeSuite::M1099() {
       SERIAL_ECHOLNPGM("Turn screw ", i, " ", height_difference/height_per_rotation, " turns clockwise");
     }
   }
+  go_to_z(400.0);
+  park_nozzle_in_bath();
 }
 
-// Purge whole tube
-void GcodeSuite::M1199() {
+void prepare_to_purge() {
   // First, memorize where we were
   const float x_before_starting = current_position.x;
   const float y_before_starting = current_position.y;
   // Then, purge out a little because it probably has water in it.
   make_sure_its_safe_to_move_over_cleaning_station();
   purge_nozzle();
-  wipe_nozzle_on_cup_side();
+  wipe_nozzle_on_stain_cup_side();
 
   // Now, go back to where we were
   go_to_xy((xy_pos_t) {x_before_starting, y_before_starting});
+}
+
+// Purge whole tube
+void GcodeSuite::M1199() {
+  prepare_to_purge();
 
   // Purge out a tube's worth
   const float feedrate_extrude_mm_s = 50;
@@ -1696,10 +1745,10 @@ void GcodeSuite::M1199() {
   for (int i = 1; i < number_of_steps; ++i) {
     const float feedrate = i/float(number_of_steps) * feedrate_extrude_mm_s;
     const float warm_up_purging_mm = 5 * i;
-    unscaled_e_move(warm_up_purging_mm, feedrate);
+    extrude_stain(warm_up_purging_mm, feedrate);
   }
   const float purging_mm = 4000;
-  unscaled_e_move(purging_mm, feedrate_extrude_mm_s);
+  extrude_stain(purging_mm, feedrate_extrude_mm_s);
 
   // Now, after purging the whole tube, try to prevent bare spots by imitating an actual dabbing
   do_representative_dabs_in_current_position(200);
@@ -1715,7 +1764,7 @@ void purge_some_and_park(int mm_to_extrude, int feedrate_mm_s) {
   // Move the nozzle to the purging position
   go_to_xy(NOZZLE_PURGE_POSITION);
 
-  unscaled_e_move(mm_to_extrude, feedrate_mm_s);
+  extrude_stain(mm_to_extrude, feedrate_mm_s);
   // Wait a couple of seconds before zooming off.
   gcode.dwell(4000);
 
@@ -1725,7 +1774,17 @@ void purge_some_and_park(int mm_to_extrude, int feedrate_mm_s) {
 
 // Extrude a medium amount
 void GcodeSuite::M1249() {
+  //extrude_stain(-1000.0, FEEDRATE_EXTRUDE_MM_S);
   purge_some_and_park(/*purging_mm = */ 100, /*feedrate_mm_s = */ 50);
+  /*
+  int i = READ(SYRINGE_FULL_PIN);
+  SERIAL_ECHOLNPGM("READING starts as ", i);
+  while (!i) {
+    extrude_stain(-3.0, FEEDRATE_EXTRUDE_MM_S);
+    //i = READ(SYRINGE_FULL_PIN);
+    //SERIAL_ECHOLNPGM("READING is now ", i);
+  }
+  */
 }
 
 // Priming
@@ -1741,6 +1800,7 @@ void GcodeSuite::M1209() {
 
 // Unpark nozzle
 void GcodeSuite::M1219() {
+  wipe_nozzle_on_water_cup_side();
   dry_nozzle_tip();
   go_to_xy((xy_pos_t) {35.0, 86.0});
   go_to_z(250.0);

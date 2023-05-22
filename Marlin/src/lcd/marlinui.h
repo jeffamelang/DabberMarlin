@@ -732,8 +732,8 @@ public:
     #endif
 
     #if EITHER(AUTO_BED_LEVELING_UBL, G26_MESH_VALIDATION)
-      static void wait_for_release();
     #endif
+    static void wait_for_release();
 
     static uint32_t encoderPosition;
 

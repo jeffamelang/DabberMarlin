@@ -953,6 +953,8 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
       case 1209: M1209(); break;                                    // jeff's thing
       case 1219: M1219(); break;                                    // jeff's thing
       case 1399: M1399(); break;                                    // jeff's staining routine
+      case 1398: M1398(); break;                                    // jeff's staining routine
+      case 1397: M1397(); break;                                    // jeff's staining routine
 
       #if IS_KINEMATIC
         case 665: M665(); break;                                  // M665: Set Kinematics parameters
