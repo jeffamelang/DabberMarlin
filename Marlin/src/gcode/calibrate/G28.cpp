@@ -1774,17 +1774,10 @@ void purge_some_and_park(int mm_to_extrude, int feedrate_mm_s) {
 
 // Extrude a medium amount
 void GcodeSuite::M1249() {
+  //endstops.is_refilling_syringe = true;
   //extrude_stain(-1000.0, FEEDRATE_EXTRUDE_MM_S);
-  purge_some_and_park(/*purging_mm = */ 100, /*feedrate_mm_s = */ 50);
-  /*
-  int i = READ(SYRINGE_FULL_PIN);
-  SERIAL_ECHOLNPGM("READING starts as ", i);
-  while (!i) {
-    extrude_stain(-3.0, FEEDRATE_EXTRUDE_MM_S);
-    //i = READ(SYRINGE_FULL_PIN);
-    //SERIAL_ECHOLNPGM("READING is now ", i);
-  }
-  */
+  do_representative_dabs_in_nozzle_purge_position(10);
+  //purge_some_and_park(/*purging_mm = */ 100, /*feedrate_mm_s = */ 50);
 }
 
 // Priming

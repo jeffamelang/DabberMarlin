@@ -138,7 +138,11 @@ class Endstops {
     #endif
 
   public:
-    Endstops() {};
+    Endstops() {
+      Endstops::is_refilling_syringe = false;
+    };
+
+    static bool is_refilling_syringe;
 
     /**
      * Initialize the endstop pins

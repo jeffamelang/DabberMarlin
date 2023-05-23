@@ -9,7 +9,8 @@
 
 static constexpr float FEEDRATE_XY_MM_S = 150;
 static constexpr float FEEDRATE_Z_MM_S = 35;
-static constexpr float FEEDRATE_EXTRUDE_MM_S = 70;
+static constexpr float FEEDRATE_EXTRUDE_MM_S = 50;
+static constexpr float STAINING_FEEDRATE_EXTRUDE_MM_S = 25;
 
 void validate_xy(const xy_pos_t position) {
   if (position.x < 0 || position.x > X_BED_SIZE || position.y < 0 || position.y > Y_BED_SIZE) {
@@ -61,7 +62,7 @@ private:
   static constexpr float STAINING_EXTRUSION_MULTIPLIER = 9.0;
   static constexpr float RETRACTION_MM = 0.0/STAINING_EXTRUSION_MULTIPLIER;
   static constexpr float NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH = 0.25;
-  static constexpr float MINIMUM_EXTRUSION_MM = 0.05;
+  static constexpr float MINIMUM_EXTRUSION_MM = 0.02;
 
   void go_to_cruising_altitude() const {
     go_to_z(_max_surface_height + CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET);
@@ -69,7 +70,7 @@ private:
   
   void extrude_stain(const float extrusion_mm) const {
     const float adjusted_extrusion_mm = extrusion_mm > 0.01 ? std::max(MINIMUM_EXTRUSION_MM, extrusion_mm) : 0;
-    unscaled_e_move(STAINING_EXTRUSION_MULTIPLIER * adjusted_extrusion_mm, FEEDRATE_EXTRUDE_MM_S);
+    unscaled_e_move(STAINING_EXTRUSION_MULTIPLIER * adjusted_extrusion_mm, STAINING_FEEDRATE_EXTRUDE_MM_S);
   }
 
   void unretract_and_extrude_stain(const float extrusion_mm) const {
@@ -94,7 +95,7 @@ private:
   
   xy_pos_t calculate_xy_using_corner_and_offset(const xy_pos_t position) const {
     const xy_pos_t p = _upper_left_corner + PROBE_TO_NOZZLE_XY_OFFSET + position;
-    SERIAL_ECHOLNPGM("Corner (", _upper_left_corner.x, ",", _upper_left_corner.y, "), offset (", PROBE_TO_NOZZLE_XY_OFFSET.x, ",", PROBE_TO_NOZZLE_XY_OFFSET.y, "), for position of (", position.x, ",", position.y, ") calculated final position of (", p.x, ",", p.y, ")");
+    //SERIAL_ECHOLNPGM("Corner (", _upper_left_corner.x, ",", _upper_left_corner.y, "), offset (", PROBE_TO_NOZZLE_XY_OFFSET.x, ",", PROBE_TO_NOZZLE_XY_OFFSET.y, "), for position of (", position.x, ",", position.y, ") calculated final position of (", p.x, ",", p.y, ")");
     return p;
   }
   
@@ -127,7 +128,7 @@ private:
           SERIAL_ECHOLNPGM("Calculated in invalid interpolated surface height of ", interpolated_surface_height, " when max is ", _max_surface_height, " and min is ", _min_surface_height);
           gcode.dwell(500000000);
         }
-        SERIAL_ECHOLNPGM("For position (", position.x, ",", position.y, "), interpolated a surface height of ", interpolated_surface_height);
+        //SERIAL_ECHOLNPGM("For position (", position.x, ",", position.y, "), interpolated a surface height of ", interpolated_surface_height);
         return interpolated_surface_height;
       }
     }
@@ -136,7 +137,7 @@ private:
   float calculate_z(const xy_pos_t position, const float z, const float surface_offset_from_zero_height) const {
     const float interpolated_surface_height = interpolate_surface_height(position, surface_offset_from_zero_height);
     const float total_z = interpolated_surface_height + PROBE_TO_NOZZLE_Z_OFFSET + z;
-    SERIAL_ECHOLNPGM("For position (", position.x, ",", position.y, "), calculated total z of ", total_z, " from interpolated surface height of ", interpolated_surface_height, ", offset of ", PROBE_TO_NOZZLE_Z_OFFSET, ", and z of ", z);
+    //SERIAL_ECHOLNPGM("For position (", position.x, ",", position.y, "), calculated total z of ", total_z, " from interpolated surface height of ", interpolated_surface_height, ", offset of ", PROBE_TO_NOZZLE_Z_OFFSET, ", and z of ", z);
     return total_z;
   }
   

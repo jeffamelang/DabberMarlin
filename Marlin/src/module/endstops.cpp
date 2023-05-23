@@ -704,6 +704,8 @@ void __O2 Endstops::report_states() {
 #endif
 #define _ENDSTOP(AXIS, MINMAX) __ENDSTOP(AXIS, MINMAX)
 
+bool Endstops::is_refilling_syringe = false;
+
 /**
  * Called from interrupt context by the Endstop ISR or Stepper ISR!
  * Read endstops to get their current states, register hits for all
@@ -714,19 +716,11 @@ void Endstops::update() {
   number_of_syringe_full_readings = TERN(READ(SYRINGE_FULL_PIN), number_of_syringe_full_readings + 1, 0);
   static const int SYRINGE_FULL_READINGS_THRESHOLD = 5;
 
-  //if (number_of_syringe_full_readings > SYRINGE_FULL_READINGS_THRESHOLD) {
-  if (READ(SYRINGE_FULL_PIN)) {
-    SERIAL_ECHOLNPGM("It looks like the syringe is reading as full, stopping the planner");
-    if (stepper.axis_is_moving(E_AXIS)) {
-      if (stepper.motor_direction(E_AXIS)) { // -direction
-        SERIAL_ECHOLNPGM("Calling endstop_triggered");
-        planner.endstop_triggered(E_AXIS);
-      } else {
-         SERIAL_ECHOLNPGM("Wrong direction");
-      }
-    } else {
-      SERIAL_ECHOLNPGM("E_AXIS isn't moving");
-    }
+  //if (is_refilling_syringe && READ(SYRINGE_FULL_PIN)) {
+  if (is_refilling_syringe && number_of_syringe_full_readings > SYRINGE_FULL_READINGS_THRESHOLD) {
+    SERIAL_ECHOLNPGM("Syringe pin is reading as full AND we're refilling, so stopping");
+    planner.endstop_triggered(E0_AXIS);
+    is_refilling_syringe = false;
   }
 
   #if !ENDSTOP_NOISE_THRESHOLD      // If not debouncing...
