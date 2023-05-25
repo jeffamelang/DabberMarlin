@@ -109,7 +109,7 @@ Endstops::endstop_mask_t Endstops::live_state = 0;
 
 void Endstops::init() {
 
-  SET_INPUT_PULLDOWN(SYRINGE_FULL_PIN);
+  SET_INPUT_PULLUP(SYRINGE_FULL_PIN);
 
   #if HAS_X_MIN
     #if ENABLED(ENDSTOPPULLUP_XMIN)
@@ -712,16 +712,49 @@ bool Endstops::is_refilling_syringe = false;
  * axes moving in the direction of their endstops, and abort moves.
  */
 void Endstops::update() {
-  static int number_of_syringe_full_readings = 0;
-  number_of_syringe_full_readings = TERN(READ(SYRINGE_FULL_PIN), number_of_syringe_full_readings + 1, 0);
-  static const int SYRINGE_FULL_READINGS_THRESHOLD = 5;
+  static const int SYRINGE_FULL_READINGS_THRESHOLD = 1;
+  static long update_count = 0;
 
   //if (is_refilling_syringe && READ(SYRINGE_FULL_PIN)) {
-  if (is_refilling_syringe && number_of_syringe_full_readings > SYRINGE_FULL_READINGS_THRESHOLD) {
+  const bool this_reading = !READ(SYRINGE_FULL_PIN);
+  static bool is_reading_as_full = false;
+  if (this_reading && !is_reading_as_full) {
+    SERIAL_ECHOLNPGM("Syringe pin starting to read as full");
+    is_reading_as_full = true;
+  }
+  if (!this_reading && is_reading_as_full) {
+    SERIAL_ECHOLNPGM("Syringe pin NO LONGER reading as full\n");
+    is_reading_as_full = false;
+  }
+  /*
+  */
+  if (is_refilling_syringe) {
+    static int number_of_syringe_full_readings = 0;
+    number_of_syringe_full_readings = this_reading ? number_of_syringe_full_readings + 1 : 0;
+    if (update_count % 100 == 0) {
+      SERIAL_ECHOLNPGM("Syringe pin is refilling");
+    }
+    if (number_of_syringe_full_readings > 0) {
+      SERIAL_ECHOLNPGM("Syringe pin is refilling AND this readings is ", this_reading, " and number of full readings is ", number_of_syringe_full_readings);
+    }
+    if (number_of_syringe_full_readings > SYRINGE_FULL_READINGS_THRESHOLD) {
+      SERIAL_ECHOLNPGM("Syringe pin is reading as full AND we're refilling, so stopping");
+      //planner.endstop_triggered(E_AXIS);
+      planner.quick_stop();
+      is_refilling_syringe = false;
+    }
+    ++update_count;
+  }
+  /*
+  */
+  //if (is_refilling_syringe && READ(SYRINGE_FULL_PIN)) {
+  /*
+  if (is_refilling_syringe && this_reading) {
     SERIAL_ECHOLNPGM("Syringe pin is reading as full AND we're refilling, so stopping");
-    planner.endstop_triggered(E0_AXIS);
+    planner.quick_stop();
     is_refilling_syringe = false;
   }
+  */
 
   #if !ENDSTOP_NOISE_THRESHOLD      // If not debouncing...
     if (!abort_enabled()) return;   // ...and not enabled, exit.

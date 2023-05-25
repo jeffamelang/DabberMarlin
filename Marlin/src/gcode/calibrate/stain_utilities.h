@@ -5,6 +5,7 @@
 #include "../../module/planner.h"
 #include "../../module/motion.h"
 #include <map>
+#include <string>
 #include <vector>
 
 static constexpr float FEEDRATE_XY_MM_S = 150;
@@ -37,11 +38,37 @@ void display_message(const char* message) {
   LCD_MESSAGE_F(message);
 }
 
+void display_message(const std::string s) {
+  display_message(s.c_str());
+}
+
+void display_quadrant_message(const int quadrant, std::string s) {
+  display_message(std::to_string(quadrant) + std::string(": ") + s);
+}
+
+void display_subquadrant_message(const int quadrant, const int subquadrant, std::string s) {
+  display_message(std::to_string(quadrant) + std::string(".") + std::to_string(subquadrant) + std::string(": ") + s);
+}
+
 void display_message_and_wait_for_button_push(const char* message) {
   display_message(message);
   while (!ui.button_pressed()) {
     safe_delay(50);
   }
+}
+
+static constexpr float STAINING_EXTRUSION_MULTIPLIER = 2.8;
+static constexpr float MINIMUM_EXTRUSION_MM = 0.00;
+void extrude_scaled_stain(const float extrusion_mm, const float feedrate_mm_s) {
+  const float sign = extrusion_mm < 0. ? -1. : 1.;
+  const float adjusted_extrusion_mm = fabs(extrusion_mm) > 0.0 ? std::max(MINIMUM_EXTRUSION_MM, fabs(extrusion_mm)) * sign : 0;
+  const float final_extrusion_mm = 9. * STAINING_EXTRUSION_MULTIPLIER * adjusted_extrusion_mm;
+  //SERIAL_ECHOLNPGM("Doing an extrude_scaled_stain with extrusion ", final_extrusion_mm, " and feedrate of ", final_feedrate_mm_s);
+  unscaled_e_move(final_extrusion_mm, feedrate_mm_s);
+}
+
+void extrude_scaled_stain(const float extrusion_mm) {
+  extrude_scaled_stain(extrusion_mm, FEEDRATE_EXTRUDE_MM_S);
 }
 
 class Dabber {
@@ -56,21 +83,18 @@ private:
   float _max_surface_height;
 
   static constexpr xy_pos_t PROBE_TO_NOZZLE_XY_OFFSET = {-25.25, 0};
-  static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 0.35;
+  static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 0.30;
   static constexpr float APPROACH_FROM_Z_OFFSET = 1;
   static constexpr float CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET = 4;
-  static constexpr float STAINING_EXTRUSION_MULTIPLIER = 9.0;
   static constexpr float RETRACTION_MM = 0.0/STAINING_EXTRUSION_MULTIPLIER;
   static constexpr float NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH = 0.25;
-  static constexpr float MINIMUM_EXTRUSION_MM = 0.02;
 
   void go_to_cruising_altitude() const {
     go_to_z(_max_surface_height + CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET);
   }
-  
+
   void extrude_stain(const float extrusion_mm) const {
-    const float adjusted_extrusion_mm = extrusion_mm > 0.01 ? std::max(MINIMUM_EXTRUSION_MM, extrusion_mm) : 0;
-    unscaled_e_move(STAINING_EXTRUSION_MULTIPLIER * adjusted_extrusion_mm, STAINING_FEEDRATE_EXTRUDE_MM_S);
+    extrude_scaled_stain(extrusion_mm, STAINING_FEEDRATE_EXTRUDE_MM_S);
   }
 
   void unretract_and_extrude_stain(const float extrusion_mm) const {

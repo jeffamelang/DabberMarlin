@@ -538,6 +538,7 @@ private:
   static void M1399();
   static void M1398();
   static void M1397();
+  static void M1396();
 
   #if HAS_LEVELING
     #if ENABLED(G29_RETRY_AND_RECOVER)

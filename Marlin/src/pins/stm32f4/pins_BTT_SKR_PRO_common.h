@@ -108,8 +108,9 @@
 #endif
 
 //#define SYRINGE_FULL_PIN                         PG5
-//#define SYRINGE_FULL_PIN                         PG8
-#define SYRINGE_FULL_PIN                         PE4
+#define SYRINGE_FULL_PIN                         PG8
+//#define SYRINGE_FULL_PIN                         PD0
+//#define SYRINGE_FULL_PIN                         PE4
 
 //
 // Z Probe must be this pin

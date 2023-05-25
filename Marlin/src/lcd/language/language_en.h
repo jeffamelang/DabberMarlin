@@ -490,6 +490,7 @@ namespace Language_en {
   LSTR MSG_STAIN_DRAGON_WOLF_4_4                   = _UxGT("Stain Dragon/Wolf 44");
   LSTR MSG_STAIN_DRAGON_WOLF_1_4                   = _UxGT("Stain Dragon/Wolf 14");
   LSTR MSG_STAIN_DRAGON_WOLF_1_1                   = _UxGT("Stain Dragon/Wolf 11");
+  LSTR MSG_REFILL_SYRINGE                   = _UxGT("Refill Syringe");
   LSTR MSG_STAIN_UTILITIES_1                   = _UxGT("About to offset");
   LSTR MSG_PARK_BATH                   = _UxGT("Park in Bath");
   LSTR MSG_UNPARK                   = _UxGT("Unpark to Purge");
