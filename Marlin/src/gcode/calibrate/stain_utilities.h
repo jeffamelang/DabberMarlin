@@ -13,27 +13,6 @@ static constexpr float FEEDRATE_Z_MM_S = 35;
 static constexpr float FEEDRATE_EXTRUDE_MM_S = 50;
 static constexpr float STAINING_FEEDRATE_EXTRUDE_MM_S = 25;
 
-void validate_xy(const xy_pos_t position) {
-  if (position.x < 0 || position.x > X_BED_SIZE || position.y < 0 || position.y > Y_BED_SIZE) {
-    SERIAL_ECHOLNPGM("Cannot move to position of (", position.x, ", ", position.y, "), it's not a valid position.");
-    gcode.dwell(500000000);
-  }
-}
-
-void go_to_xy(const xy_pos_t position) {
-  validate_xy(position);
-  do_blocking_move_to_xy(position, FEEDRATE_XY_MM_S);
-}
-
-void go_to_xy_z(const xy_pos_t position, const float z) {
-  validate_xy(position);
-  do_blocking_move_to_xy_z(position, z, FEEDRATE_XY_MM_S);
-}
-
-void go_to_z(const float z) {
-  do_blocking_move_to_z(z, FEEDRATE_Z_MM_S);
-}
-
 void display_message(const char* message) {
   LCD_MESSAGE_F(message);
 }
@@ -57,7 +36,72 @@ void display_message_and_wait_for_button_push(const char* message) {
   }
 }
 
-static constexpr float STAINING_EXTRUSION_MULTIPLIER = 2.8;
+/* Side indexes:
+0. Base left (dragon)
+1. Base right (wolf)
+2. Base back
+3. Base front
+4. Base bottom
+5. Lid left (dragon)
+6. Lid right (wolf)
+7. Lid back
+8. Lid front
+9. Lid top
+*/
+enum Side { 
+  UNKNOWN, 
+  BASE_LEFT,  // Next
+  BASE_RIGHT, // Tuned
+  BASE_BACK,  // Tuned
+  BASE_FRONT, 
+  BASE_BOTTOM,  // Tuned
+  LID_LEFT, 
+  LID_RIGHT, 
+  LID_BACK, 
+  LID_FRONT, 
+  LID_TOP
+};
+
+std::string get_side_name(const Side s) {
+  switch (s) {
+    case UNKNOWN: return std::string("UNKNOWN");
+    case BASE_LEFT: return std::string("BASE_LEFT");
+    case BASE_RIGHT: return std::string("BASE_RIGHT");
+    case BASE_BACK: return std::string("BASE_BACK");
+    case BASE_FRONT: return std::string("BASE_FRONT");
+    case BASE_BOTTOM: return std::string("BASE_BOTTOM");
+    case LID_LEFT: return std::string("LID_LEFT");
+    case LID_RIGHT: return std::string("LID_RIGHT");
+    case LID_BACK: return std::string("LID_BACK");
+    case LID_FRONT: return std::string("LID_FRONT");
+    case LID_TOP: return std::string("LID_TOP");
+    default: return std::string("UNRECOGNIZED SIDE");
+  }
+}
+
+void validate_xy(const xy_pos_t position) {
+  if (position.x < 0 || position.x > X_BED_SIZE || position.y < 0 || position.y > Y_BED_SIZE) {
+    display_message("Error, see log");
+    SERIAL_ECHOLNPGM("Cannot move to position of (", position.x, ", ", position.y, "), it's not a valid position.");
+    gcode.dwell(500000000);
+  }
+}
+
+void go_to_xy(const xy_pos_t position) {
+  validate_xy(position);
+  do_blocking_move_to_xy(position, FEEDRATE_XY_MM_S);
+}
+
+void go_to_xy_z(const xy_pos_t position, const float z) {
+  validate_xy(position);
+  do_blocking_move_to_xy_z(position, z, FEEDRATE_XY_MM_S);
+}
+
+void go_to_z(const float z) {
+  do_blocking_move_to_z(z, FEEDRATE_Z_MM_S);
+}
+
+static constexpr float STAINING_EXTRUSION_MULTIPLIER = 2.6;
 static constexpr float MINIMUM_EXTRUSION_MM = 0.00;
 void extrude_scaled_stain(const float extrusion_mm, const float feedrate_mm_s) {
   const float sign = extrusion_mm < 0. ? -1. : 1.;
@@ -76,16 +120,19 @@ public:
   static constexpr float PROBE_TO_NOZZLE_Z_OFFSET = -1.5;
 
 private:
+  const Side _side;
   const xy_pos_t _upper_left_corner;
   const float _surface_height;
   const std::map<double, std::vector<std::pair<xy_pos_t, float>>> _all_elevations_probed_surface_heights;
   float _min_surface_height;
   float _max_surface_height;
+  mutable int _number_of_dabs_dabbed;
+  mutable int _total_number_of_dabs;
 
   static constexpr xy_pos_t PROBE_TO_NOZZLE_XY_OFFSET = {-25.25, 0};
   static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 0.30;
   static constexpr float APPROACH_FROM_Z_OFFSET = 1;
-  static constexpr float CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET = 4;
+  static constexpr float CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET = 2.5;
   static constexpr float RETRACTION_MM = 0.0/STAINING_EXTRUSION_MULTIPLIER;
   static constexpr float NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH = 0.25;
 
@@ -179,12 +226,16 @@ private:
   }
 
 public:
-  Dabber(const xy_pos_t upper_left_corner, 
+  Dabber(const Side side, 
+  const xy_pos_t upper_left_corner, 
          const float surface_height,
          const std::map<double, std::vector<std::pair<xy_pos_t, float>>> all_elevations_probed_surface_heights) :
+    _side(side),
     _upper_left_corner(upper_left_corner), 
     _surface_height(surface_height), 
-    _all_elevations_probed_surface_heights(all_elevations_probed_surface_heights) {
+    _all_elevations_probed_surface_heights(all_elevations_probed_surface_heights), 
+    _number_of_dabs_dabbed(0),
+    _total_number_of_dabs(0) {
     _min_surface_height = 1000;
     _max_surface_height = 0;
     for(auto iter = _all_elevations_probed_surface_heights.begin(); iter != _all_elevations_probed_surface_heights.end(); ++iter) {
@@ -194,8 +245,19 @@ public:
       }
     }
   }
+  
+  void set_total_number_of_dabs(int total_number_of_dabs) const {
+    _total_number_of_dabs = total_number_of_dabs;
+  }
 
   void dab(const xy_pos_t position, const float extrusion_mm, const float surface_offset_from_zero_height, const xy_pos_t post_dab_scoot, const xy_pos_t approach_from, const bool is_a_boundary_dab) const {
+    _number_of_dabs_dabbed++;
+    char buffer[40];
+    sprintf(buffer, "%3d/%3d: %s", _number_of_dabs_dabbed, _total_number_of_dabs, get_side_name(_side).c_str());
+    display_message(buffer);
+    if (_number_of_dabs_dabbed % 10 == 0 || abs(_number_of_dabs_dabbed - _total_number_of_dabs) < 3) {
+      SERIAL_ECHOLNPGM("Side ", _side, ": Dab number ", _number_of_dabs_dabbed, "/", _total_number_of_dabs);
+    }
     //SERIAL_ECHOLNPGM("Dabbing with position of (", position.x, ", ", position.y, "), surface offset of ", surface_offset_from_zero_height, ", post dab scoot of (", post_dab_scoot.x, ",", post_dab_scoot.y, "), approach from of (", approach_from.x, ",", approach_from.y, ")");
     // Make sure we're at cruising altitude
     go_to_cruising_altitude();
@@ -229,7 +291,7 @@ public:
       //display_message_and_wait_for_button_push("Scooting");
       go_to_xy_from_upper_left_corner(scooted_position);
       gcode.dwell(500);
-      go_to_xy_from_upper_left_corner(position);
+      //go_to_xy_from_upper_left_corner(position);
     }
     go_to_cruising_altitude();
     retract();

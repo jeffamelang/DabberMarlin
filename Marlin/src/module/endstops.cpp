@@ -731,7 +731,7 @@ void Endstops::update() {
   if (is_refilling_syringe) {
     static int number_of_syringe_full_readings = 0;
     number_of_syringe_full_readings = this_reading ? number_of_syringe_full_readings + 1 : 0;
-    if (update_count % 100 == 0) {
+    if (update_count % 500 == 0) {
       SERIAL_ECHOLNPGM("Syringe pin is refilling");
     }
     if (number_of_syringe_full_readings > 0) {

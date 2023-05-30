@@ -35,6 +35,7 @@
 #include "dab_side_base_bottom.h"
 #include "dab_side_base_front.h"
 #include "dab_side_lid_top.h"
+#include "dab_side_lid_back.h"
 #include "dab_side_lid_right.h"
 #include "dab_side_lid_left.h"
 #include "stain_utilities.h"
@@ -212,7 +213,7 @@ static const float CLEANING_STATION_VERTICAL_MOVEMENT_RATE = 6;
 static const float NOZZLE_SIDE_WIPE_OFFSET = 5.0;
 static const float NOZZLE_SIDE_WIPE_HEIGHT = 37;
 static const float NOZZLE_TIP_WIPE_HEIGHT = 34.5;
-static const float NOZZLE_STAIN_CUP_TIP_WIPE_HEIGHT = 29.6;
+static const float NOZZLE_STAIN_CUP_TIP_WIPE_HEIGHT = 29.8;
 static const double STAINING_CRUISING_ALTITUDE = 160;
 const std::vector<xy_pos_t> SIDE_WIPE_VECTORS =
     {{NOZZLE_SIDE_WIPE_OFFSET, 0.0},
@@ -274,6 +275,7 @@ void park_nozzle_in_bath() {
   }
 }
 
+/*
 void wipe_nozzle_on_water_cup_side() {
   SERIAL_ECHOLNPGM("Wiping the nozzle on the water cup side");
   make_sure_its_safe_to_move_over_cleaning_station();
@@ -284,6 +286,7 @@ void wipe_nozzle_on_water_cup_side() {
   go_to_xy((xy_pos_t) {42.0, BATH_PARKING_POSITION.y});
   move_cleaning_station_to_height(SAFE_BATH_MOVEMENT_HEIGHT);
 }
+*/
 
 void wipe_nozzle_on_stain_cup_side() {
   SERIAL_ECHOLNPGM("Wiping the nozzle on the stain cup side");
@@ -345,7 +348,7 @@ void prepare_nozzle_for_sensing() {
   display_message("Raising Bed");
   go_to_z(STAINING_CRUISING_ALTITUDE);
   display_message("Wiping Nozzle");
-  wipe_nozzle_on_water_cup_side();
+  wipe_nozzle_on_stain_cup_side();
   wipe_nozzle_sides();
   dry_nozzle_tip();
 }
@@ -371,8 +374,14 @@ void refill_syringe() {
   SERIAL_ECHOLNPGM("Refilling syringe");
   // Mark that we are refilling, so that it knows to stop when it senses the limit switch
   endstops.is_refilling_syringe = true;
-  // Refill until it senses the limit switch
-  extrude_scaled_stain(-4000.0, 40.0);
+  // Refill SLOWLY until it senses the limit switch or finishes
+  //extrude_scaled_stain(-50, 10.0);
+  unscaled_e_move(-150, 15.0);
+  // Mark that we are refilling, so that it knows to stop when it senses the limit switch
+  endstops.is_refilling_syringe = true;
+  // Refill QUICKLY until it senses the limit switch
+  unscaled_e_move(-4000, 40.0);
+  //extrude_scaled_stain(-4000.0, 40.0);
   SERIAL_ECHOLNPGM("Done refilling syringe");
 }
 
@@ -871,49 +880,6 @@ void GcodeSuite::G28() {
   SERIAL_ECHOLNPGM("Done homing");
 }
 
-    /* Side indexes:
-    0. Base left (dragon)
-    1. Base right (wolf)
-    2. Base back
-    3. Base front
-    4. Base bottom
-    5. Lid left (dragon)
-    6. Lid right (wolf)
-    7. Lid back
-    8. Lid front
-    9. Lid top
-    */
-enum Side { 
-  UNKNOWN, 
-  BASE_LEFT,  // Next
-  BASE_RIGHT, // Tuned
-  BASE_BACK,  // Tuned
-  BASE_FRONT, 
-  BASE_BOTTOM,  // Tuned
-  LID_LEFT, 
-  LID_RIGHT, 
-  LID_BACK, 
-  LID_FRONT, 
-  LID_TOP
-};
-
-std::string get_side_name(const Side s) {
-  switch (s) {
-    case UNKNOWN: return std::string("UNKNOWN");
-    case BASE_LEFT: return std::string("BASE_LEFT");
-    case BASE_RIGHT: return std::string("BASE_RIGHT");
-    case BASE_BACK: return std::string("BASE_BACK");
-    case BASE_FRONT: return std::string("BASE_FRONT");
-    case BASE_BOTTOM: return std::string("BASE_BOTTOM");
-    case LID_LEFT: return std::string("LID_LEFT");
-    case LID_RIGHT: return std::string("LID_RIGHT");
-    case LID_BACK: return std::string("LID_BACK");
-    case LID_FRONT: return std::string("LID_FRONT");
-    case LID_TOP: return std::string("LID_TOP");
-    default: return std::string("UNRECOGNIZED SIDE");
-  }
-}
-
 void print_side_to_serial_echopgm(const Side s) {
   switch (s) {
     case UNKNOWN: SERIAL_ECHOPGM("UNKNOWN"); break;
@@ -1247,8 +1213,8 @@ xy_pos_t find_edge_without_hint(const xy_pos_t & starting_location, const xy_pos
   return edge_location;
 }
 
-std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(const xy_pos_t & upper_left_corner, const Side side, const float surface_height) {
-  display_message("Probing Heights");
+std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(const int quadrant, const int subquadrant, const xy_pos_t & upper_left_corner, const Side side, const float surface_height) {
+  display_subquadrant_message(quadrant, subquadrant, "Probing Heights");
   const float cruising_altitude = surface_height + 2;
   const std::map<Side, std::map<double, std::vector<xy_pos_t>>> MESH_LEVELING_POINTS = 
     { 
@@ -1277,12 +1243,15 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
       }}}},
       {LID_BACK, 
       {{0., {
-        {4.0, -4},
-        {4.0, -17.0},
-        {45.0, -17.0},
-        {45.0, -4.0},
-        {87.0, -4.0},
-        {87.0, -17.0}
+        {2.0, -2},
+        {2.0, -11},
+        {9.0, -11.0},
+        {2.0, -47.0},
+        {46.0, -11.0},
+        {90.25, -47.0},
+        {83.25, -11.0},
+        {90.25, -11.0},
+        {90.25, -2.0}
       }}}},
       {LID_RIGHT, 
       {{0., {
@@ -1290,7 +1259,7 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
         {4.0, -28.0},
         {56.0, -30.0},
         {57.0, -3.0},
-        {83.0, -3.0},
+        {84.0, -2.0},
         {79.0, -37.0},
         {78.0, -53.0}
       }}}},
@@ -1347,7 +1316,7 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
       {{0., {
         {3.4, -7.6},
         {3.4, -51.6},
-        {3.4, -74.6},
+        {3.4, -85.6},
         {34.4, -78.6},
         {34.4, -45.6},
         {34.4, -7.6},
@@ -1389,7 +1358,7 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
 
 xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height, const xy_pos_t upper_left_corner_hint) {
   display_message("Finding Corner");
-  const xy_pos_t PROBE_TO_CORNER_OFFSET = {1.1, -0.2};
+  const xy_pos_t PROBE_TO_CORNER_OFFSET = {1.1, -0.3};
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
     { 
       {LID_FRONT, {0, 4.5}},
@@ -1526,7 +1495,6 @@ void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) {
   std::vector<std::vector<std::map<double, std::vector<std::pair<xy_pos_t, float>>>>> surface_probing_points(number_of_quadrants, std::vector<std::map<double, std::vector<std::pair<xy_pos_t, float>>>>(number_of_subquadrants));
   int number_of_sides_to_dab = 0;
   for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
-    display_message("Finding Corner");
     // Try to identify all sides in this quadrant
     for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
       // Make sure we're at a safe altitude to move around without running into things.
@@ -1545,9 +1513,10 @@ void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) {
         SERIAL_EOL();
         // If we haven't yet identified this quadrant's side, then do it now.
         if (quadrant_sides[quadrant] == Side::UNKNOWN) {
+          display_quadrant_message(quadrant, "Determining Side");
           const Side quadrant_side = identify_side(surface_height, probing_location);
           quadrant_sides[quadrant] = quadrant_side;
-          display_quadrant_message(quadrant, get_side_name(quadrant_side));
+          display_quadrant_message(quadrant, std::string("Found ") + get_side_name(quadrant_side));
         }
       }
       surface_heights[quadrant][subquadrant] = surface_height;
@@ -1609,7 +1578,7 @@ void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) {
       } 
 
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY found upper left corner at (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height, ", probing leveling points.");
-      surface_probing_points[quadrant][subquadrant] = probe_leveling_points(upper_left_corner, quadrant_sides[quadrant], surface_height);
+      surface_probing_points[quadrant][subquadrant] = probe_leveling_points(quadrant, subquadrant, upper_left_corner, quadrant_sides[quadrant], surface_height);
       SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), SUCCESSFULLY probed leveling points, proceeding to dab with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height);
       ++number_of_sides_to_dab;
     }
@@ -1624,18 +1593,20 @@ void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) {
     bool already_stained_first_side = false;
     for (int quadrant = 0; quadrant < number_of_quadrants; ++quadrant) {
       const Side quadrant_side = quadrant_sides[quadrant];
+      SERIAL_ECHOLNPGM("Staining quadrant ", quadrant, ", which is a ", quadrant_side);
       if (quadrant_side == UNKNOWN) {
         SERIAL_ECHOLNPGM("We weren't able to determine a side type for quadrant ", quadrant, ", so we're skipping it.");
         continue;
       }
       for (int subquadrant = 0; subquadrant < number_of_subquadrants; ++subquadrant) {
+        SERIAL_ECHOLNPGM("Staining subquadrant ", quadrant, ":", subquadrant);
         const float surface_height = surface_heights[quadrant][subquadrant];
         const xy_pos_t upper_left_corner = upper_left_corners[quadrant][subquadrant];
         const std::map<double, std::vector<std::pair<xy_pos_t, float>>> & all_elevations_probing_points = surface_probing_points[quadrant][subquadrant];
         SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Dabbing with corner (", upper_left_corner.x, ",", upper_left_corner.y, ") and surface height of ", surface_height , " and ", all_elevations_probing_points.size(), " probing point elevations");
         // Skip this side if we don't have all the information
         if (isnan(surface_height) || isnan(upper_left_corner.x) || isnan(upper_left_corner.y) || all_elevations_probing_points.size() == 0) {
-          SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), we seem to be missing some data, so we're skipping it.");
+          SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), we seem to be missing some data, so we're skipping it. Surface height is ", surface_height, ", upper left corner is ", upper_left_corner.x, ",", upper_left_corner.y, ", probing points size is ", all_elevations_probing_points.size());
           // There is no side here; move to the next one
           continue;
         }
@@ -1644,50 +1615,57 @@ void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) {
         for (auto iter = all_elevations_probing_points.begin(); iter != all_elevations_probing_points.end(); ++iter) {
           SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Elevation ", iter->first, " has ", iter->second.size(), " points");
         }
-        const Dabber* dabber = new Dabber(upper_left_corner, surface_height, all_elevations_probing_points);
+        const Dabber* dabber = new Dabber(quadrant_side, upper_left_corner, surface_height, all_elevations_probing_points);
+        SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Refilling syringe");
         travel_to_purge_and_refill_syringe_and_prime();
         display_subquadrant_message(quadrant, subquadrant, "Priming");
         if (!already_stained_first_side) {
+          SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Priming");
           do_a_priming_dab(*dabber, quadrant_side);
           already_stained_first_side = true;
         }
         display_subquadrant_message(quadrant, subquadrant, std::string("Dab ") + get_side_name(quadrant_side));
         switch (quadrant_side) {
           case BASE_BACK:
-            SERIAL_ECHOLNPGM("Starting to dab a base back");
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a base back");
             dab_side_base_back(dabber);
             break;
           case BASE_LEFT:
-            SERIAL_ECHOLNPGM("Starting to dab a base left");
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a base left");
             dab_side_base_left(dabber);
             break;
           case BASE_RIGHT:
-            SERIAL_ECHOLNPGM("Starting to dab a base right");
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a base right");
             dab_side_base_right(dabber);
             break;
           case BASE_BOTTOM:
-            SERIAL_ECHOLNPGM("Starting to dab a base bottom");
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a base bottom");
             dab_side_base_bottom(dabber);
             break;
           case BASE_FRONT:
-            SERIAL_ECHOLNPGM("Starting to dab a base front");
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a base front");
             dab_side_base_front(dabber);
             break;
           case LID_TOP:
-            SERIAL_ECHOLNPGM("Starting to dab a lid top");
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a lid top");
             dab_side_lid_top(dabber);
             break;
           case LID_RIGHT:
-            SERIAL_ECHOLNPGM("Starting to dab a lid right");
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a lid right");
             dab_side_lid_right(dabber);
             break;
           case LID_LEFT:
-            SERIAL_ECHOLNPGM("Starting to dab a lid left");
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a lid left");
             dab_side_lid_left(dabber);
+            break;
+          case LID_BACK:
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a lid back");
+            dab_side_lid_back(dabber);
             break;
           default:
             SERIAL_ECHOLNPGM("Cannot print a side of type ", quadrant_side, ", add it to the switch statement.");
         }
+        SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Done dabbing the subquadrant");
         delete dabber;
       }
     }
@@ -1697,6 +1675,7 @@ void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) {
   } else {
     SERIAL_ECHOLNPGM("Couldn't find any sides to dab, quitting");
   }
+  SERIAL_ECHOLNPGM("Parking and ending");
   display_message("Ending");
   park_after_dabbing();
   go_to_z(400);
@@ -1812,11 +1791,14 @@ void GcodeSuite::M1199() {
   const float feedrate_extrude_mm_s = 100.0;
   const float mm_per_ml = 500;
   const float ml_per_refill = 5.0;
-  const float purging_mm = 8.1 * ml_per_refill * mm_per_ml;
+  const float purging_mm = 4.1 * ml_per_refill * mm_per_ml;
   const float purge_mm_per_refill = mm_per_ml * ml_per_refill;
   // good enough
   const int number_of_refills = purging_mm / (purge_mm_per_refill - 1.);
   for (int i = 0; i < number_of_refills; ++i) {
+    char buffer[40];
+    sprintf(buffer, "Purge tube %d/%d", i+1, number_of_refills);
+    display_message(buffer);
     refill_syringe();
     unscaled_e_move(purge_mm_per_refill, feedrate_extrude_mm_s);
   }
@@ -1863,7 +1845,7 @@ void GcodeSuite::M1209() {
 
 // Unpark nozzle
 void GcodeSuite::M1219() {
-  wipe_nozzle_on_water_cup_side();
+  wipe_nozzle_on_stain_cup_side();
   dry_nozzle_tip();
   go_to_xy(PURGE_WHOLE_TUBE_LOCATION);
   go_to_z(250.0);
