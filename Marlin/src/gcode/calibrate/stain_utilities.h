@@ -101,7 +101,7 @@ void go_to_z(const float z) {
   do_blocking_move_to_z(z, FEEDRATE_Z_MM_S);
 }
 
-static constexpr float STAINING_EXTRUSION_MULTIPLIER = 2.6;
+static constexpr float STAINING_EXTRUSION_MULTIPLIER = 2.35; // 2.6 is too dark
 static constexpr float MINIMUM_EXTRUSION_MM = 0.00;
 void extrude_scaled_stain(const float extrusion_mm, const float feedrate_mm_s) {
   const float sign = extrusion_mm < 0. ? -1. : 1.;
@@ -130,11 +130,11 @@ private:
   mutable int _total_number_of_dabs;
 
   static constexpr xy_pos_t PROBE_TO_NOZZLE_XY_OFFSET = {-25.25, 0};
-  static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 0.30;
+  static constexpr float DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT = 0.25;
   static constexpr float APPROACH_FROM_Z_OFFSET = 1;
   static constexpr float CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET = 2.5;
   static constexpr float RETRACTION_MM = 0.0/STAINING_EXTRUSION_MULTIPLIER;
-  static constexpr float NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH = 0.25;
+  static constexpr float NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH = 0.00;
 
   void go_to_cruising_altitude() const {
     go_to_z(_max_surface_height + CRUISING_ALTITUDE_SURFACE_HEIGHT_OFFSET);
@@ -269,17 +269,20 @@ public:
     // Extrude the stain for this dab
     unretract_and_extrude_stain(extrusion_mm);
     // Lower and do the actual dab
-    const float embossing_extra_depth = is_a_boundary_dab ? 0 : NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH;
+    //const float embossing_extra_depth = is_a_boundary_dab ? 0 : NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH;
+    const float embossing_extra_depth = NON_BOUNDARY_DAB_EXTRA_NOZZLE_DEPTH;
     //const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT + surface_offset_from_zero_height - embossing_extra_depth;
     const float dabbing_height = DABBING_ELEVATION_ABOVE_SURFACE_HEIGHT - embossing_extra_depth;
     if (!vector_is_zero(approach_from)) {
-      const float total_z_offset = dabbing_height + APPROACH_FROM_Z_OFFSET + vector_magnitude(approach_from);
+      //const float total_z_offset = dabbing_height + APPROACH_FROM_Z_OFFSET + vector_magnitude(approach_from);
+      const float total_z_offset = dabbing_height + APPROACH_FROM_Z_OFFSET;
       //SERIAL_ECHOLNPGM("Preparing to approach at (", position.x, ", ", position.y, "), offset of (", dabbing_height, " + ", APPROACH_FROM_Z_OFFSET, " + ", vector_magnitude(approach_from), ") = ", total_z_offset);
       //display_message_and_wait_for_button_push("Preparing approach");
-      go_to_z_from_surface(position, total_z_offset, surface_offset_from_zero_height);
+      go_to_z_from_surface(possible_offsetted_position, total_z_offset, surface_offset_from_zero_height);
       //SERIAL_ECHOLNPGM("Approaching to (", position.x, ", ", position.y, "), offset of (", dabbing_height, " + ", APPROACH_FROM_Z_OFFSET, ") = ", dabbing_height + APPROACH_FROM_Z_OFFSET);
       //display_message_and_wait_for_button_push("Approaching");
-      go_to_xy_z_from_upper_left_corner(position, dabbing_height + APPROACH_FROM_Z_OFFSET, surface_offset_from_zero_height);
+      //go_to_xy_z_from_upper_left_corner(position, dabbing_height + APPROACH_FROM_Z_OFFSET, surface_offset_from_zero_height);
+      go_to_xy_z_from_upper_left_corner(position, dabbing_height, surface_offset_from_zero_height);
     }
     //SERIAL_ECHOLNPGM("At (", position.x, ", ", position.y, "), dropping to dabbing_height of ", dabbing_height);
     //display_message_and_wait_for_button_push("Dabbing");

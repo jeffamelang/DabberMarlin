@@ -67,9 +67,9 @@
 // Author info of this build printed to the host during boot and M115
 #define STRING_CONFIG_H_AUTHOR "(jeff, DABBER)" // Who made the changes.
 // Name displayed in the LCD "Ready" message and Info menu
-#define CUSTOM_MACHINE_NAME "DABBER.0.5"
+#define CUSTOM_MACHINE_NAME "DABBER 1.0"
 //#define CUSTOM_VERSION_FILE Version.h // Path from the root directory (no quotes)
-#define SHORT_BUILD_VERSION "aubrie's the best"
+#define SHORT_BUILD_VERSION "i love aubrie"
 // Feedrate (mm/min) for the first approach when double-probing (MULTIPLE_PROBING == 2)
 #define Z_PROBE_FEEDRATE_FAST (10*60) // can't go faster or skip steps
 // Feedrate (mm/min) for the "accurate" probe of each point
@@ -1719,7 +1719,7 @@
 
 // The size of the printable area
 #define X_BED_SIZE 400
-#define Y_BED_SIZE 423
+#define Y_BED_SIZE 429.5
 
 // Travel limits (linear=mm, rotational=°) after homing, corresponding to endstop positions.
 #define X_MIN_POS 0

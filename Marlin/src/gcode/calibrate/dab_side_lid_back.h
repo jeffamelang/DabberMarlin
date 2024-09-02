@@ -2,7 +2,7 @@
 #include "../../core/types.h"
 #include "stain_utilities.h"
 void dab_side_lid_back(const Dabber* dabber) {
-  dabber->set_total_number_of_dabs(72);
+  dabber->set_total_number_of_dabs(74);
   dabber->dab((xy_pos_t) {88.933440,-3.519692}, 0.209868, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, true);
   dabber->dab((xy_pos_t) {88.933440,-8.713385}, 0.177353, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, true);
   dabber->dab((xy_pos_t) {88.933440,-13.907077}, 0.177353, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, true);
@@ -75,4 +75,6 @@ void dab_side_lid_back(const Dabber* dabber) {
   dabber->dab((xy_pos_t) {1.500805,-41.849998}, 0.059347, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, true);
   dabber->dab((xy_pos_t) {1.500805,-47.086617}, 0.059347, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, true);
   dabber->dab((xy_pos_t) {1.500805,-52.280308}, 0.068589, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, true);
+  dabber->dab((xy_pos_t) {88.345009,-19.557846}, 0.000000, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, false);
+  dabber->dab((xy_pos_t) {4.012157,-19.557846}, 0.000000, 0.000000, (xy_pos_t) {0.000000,0.000000}, (xy_pos_t) {0.000000, 0.000000}, false);
 }

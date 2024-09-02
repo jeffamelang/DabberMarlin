@@ -35,6 +35,7 @@
 #include "dab_side_base_bottom.h"
 #include "dab_side_base_front.h"
 #include "dab_side_lid_top.h"
+#include "dab_side_lid_front.h"
 #include "dab_side_lid_back.h"
 #include "dab_side_lid_right.h"
 #include "dab_side_lid_left.h"
@@ -246,14 +247,14 @@ void make_sure_its_safe_to_move_over_cleaning_station() {
   move_cleaning_station_to_height(SAFE_BATH_MOVEMENT_HEIGHT);
 }
 
-void purge_nozzle() {
+void purge_water_out_of_nozzle() {
   SERIAL_ECHOLNPGM("Purging nozzle");
   make_sure_its_safe_to_move_over_cleaning_station();
   // Move the nozzle to the purging position
   go_to_xy(NOZZLE_PURGE_POSITION);
 
   const float feedrate_extrude_mm_s = 30;
-  const float purging_mm = 5;
+  const float purging_mm = 15;
   extrude_scaled_stain(purging_mm, feedrate_extrude_mm_s);
   // Wait a couple of seconds before zooming off.
   gcode.dwell(4000);
@@ -403,7 +404,7 @@ void travel_to_purge_and_refill_syringe_and_prime() {
 void after_sensing_prepare_to_dab() {
   SERIAL_ECHOLNPGM("After sensing, preparing to dab.");
   make_sure_its_safe_to_move_over_cleaning_station();
-  purge_nozzle();
+  purge_water_out_of_nozzle();
   wipe_nozzle_on_stain_cup_side();
 }
 
@@ -1224,7 +1225,7 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
         {46.0, -4.4},
         {12.0, -4.4}
       }},
-       {-5.4, {
+       {-4.4, {
         {5.6, -17.4},
         {87.6, -17.4}
       }},
@@ -1299,17 +1300,21 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
       {{0., {
         {90.0, -13.0},
         {45.0, -13.0},
-        {4.0, -13.0},
-        {4.0, -48.0},
-        {4.0, -79.0},
+        {3.0, -12.0},
+        {3.0, -48.0},
+        {3.0, -80.0},
         {45.0, -79.0},
         {90.0, -79.0}
       }},
        {-3.0, {
+        {70.0, -90.0},
         {65.0, -88.0},
+        {2.0, -90.0},
         {4.0, -88.0},
+        {2.0, -2.0},
         {4.0, -4.0},
         {65.0, -4.0},
+        {70.0, -2.0},
       }},
       }},
       {BASE_RIGHT, 
@@ -1331,9 +1336,14 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
         {45, -86},
         {45, -47},
         {45, -8},
+        {86, -2},
         {83, -8},
-        {83, -47},
-        {83, -86}
+        {89, -12},
+        {80, -47},
+        {89, -47},
+        {89, -81},
+        {83, -86},
+        {86, -90.5}
       }}}}
     };
   const std::map<double, std::vector<xy_pos_t>> all_elevations_leveling_points = MESH_LEVELING_POINTS.find(side)->second;
@@ -1358,7 +1368,7 @@ std::map<double, std::vector<std::pair<xy_pos_t, float>>> probe_leveling_points(
 
 xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side side, const float surface_height, const xy_pos_t upper_left_corner_hint) {
   display_message("Finding Corner");
-  const xy_pos_t PROBE_TO_CORNER_OFFSET = {1.1, -0.3};
+  const xy_pos_t PROBE_TO_CORNER_OFFSET = {1.3, -0.8};
   const std::map<Side, xy_pos_t> PROBING_LOCATION_TO_TOP_EDGE_INITIAL_OFFSETS = 
     { 
       {LID_FRONT, {0, 4.5}},
@@ -1387,7 +1397,7 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
     };
   const std::map<Side, float> EXTRA_DEPTH_LEFT_SIDE =
     { 
-      {LID_FRONT, 5.5},
+      {LID_FRONT, 4.4},
       {LID_TOP, 0.},
       {LID_BACK, 0.},
       {LID_RIGHT, 0.},
@@ -1459,6 +1469,23 @@ xy_pos_t find_upper_left_corner(const xy_pos_t & probing_location, const Side si
   SERIAL_ECHOLNPGM("With probe and hard-coded offsets of (", PROBE_TO_CORNER_OFFSET.x, ",", PROBE_TO_CORNER_OFFSET.y, "), returning upper left corner of (", upper_left_corner.x, ",", upper_left_corner.y, ")");
   go_to_xy(upper_left_corner);
   return upper_left_corner;
+}
+
+bool we_need_to_refill_syringe(int subquadrant, Side side) {
+  const std::map<Side, int> SIDES_PER_REFILL =
+    { 
+      {LID_FRONT, 4},
+      {BASE_FRONT, 4},
+      {LID_BACK, 4},
+      {LID_RIGHT, 2},
+      {LID_LEFT, 2},
+      {BASE_BOTTOM, 2},
+      {BASE_LEFT, 2},
+      {BASE_RIGHT, 2},
+      {BASE_BACK, 1},
+      {LID_TOP, 1}
+     };
+  return subquadrant % (SIDES_PER_REFILL.find(side)->second) == 0;
 }
 
 /*
@@ -1617,7 +1644,9 @@ void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) {
         }
         const Dabber* dabber = new Dabber(quadrant_side, upper_left_corner, surface_height, all_elevations_probing_points);
         SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Refilling syringe");
-        travel_to_purge_and_refill_syringe_and_prime();
+        if (we_need_to_refill_syringe(subquadrant, quadrant_side)) {
+          travel_to_purge_and_refill_syringe_and_prime();
+        }
         display_subquadrant_message(quadrant, subquadrant, "Priming");
         if (!already_stained_first_side) {
           SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Priming");
@@ -1645,6 +1674,10 @@ void stain_dragon_wolf(int number_of_quadrants, int number_of_subquadrants) {
           case BASE_FRONT:
             SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a base front");
             dab_side_base_front(dabber);
+            break;
+          case LID_FRONT:
+            SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a lid front");
+            dab_side_lid_front(dabber);
             break;
           case LID_TOP:
             SERIAL_ECHOLNPGM("(", quadrant, ":", subquadrant, "), Starting to dab a lid top");
@@ -1771,7 +1804,7 @@ void prepare_to_purge() {
   const float y_before_starting = current_position.y;
   // Then, purge out a little because it probably has water in it.
   make_sure_its_safe_to_move_over_cleaning_station();
-  purge_nozzle();
+  purge_water_out_of_nozzle();
   wipe_nozzle_on_stain_cup_side();
 
   // Now, go back to where we were
